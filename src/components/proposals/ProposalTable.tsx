@@ -13,6 +13,7 @@ interface ProposalTableProps {
   onRenameColumn: (colId: string, name: string) => void;
   onChangeColumnType: (colId: string, type: ColumnType) => void;
   onDeleteColumn: (colId: string) => void;
+  onDuplicateColumn: (colId: string) => void;
   onReorderColumns: (sourceId: string, targetId: string, position: 'before' | 'after') => void;
   onResizeColumn: (colId: string, width: number) => void;
   onAddOption: (colId: string, label: string, color: string) => void;
@@ -27,7 +28,7 @@ const ACTION_COL_WIDTH = 72;
 export const ProposalTable: React.FC<ProposalTableProps> = ({
   columns, rows,
   onUpdateCell, onDuplicateRow, onDeleteRow,
-  onRenameColumn, onChangeColumnType, onDeleteColumn,
+  onRenameColumn, onChangeColumnType, onDeleteColumn, onDuplicateColumn,
   onReorderColumns, onResizeColumn,
   onAddOption, onUpdateOption, onDeleteOption,
 }) => {
@@ -218,6 +219,8 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       onRename={name => onRenameColumn(col.id, name)}
                       onChangeType={type => onChangeColumnType(col.id, type)}
                       onDelete={() => onDeleteColumn(col.id)}
+                      onDuplicate={() => onDuplicateColumn(col.id)}
+                      onSetWidth={w => onResizeColumn(col.id, w)}
                       onMoveLeft={() => onReorderColumns(col.id, columns[idx - 1]?.id, 'before')}
                       onMoveRight={() => onReorderColumns(col.id, columns[idx + 1]?.id, 'after')}
                       onAddOption={(label, color) => onAddOption(col.id, label, color)}

@@ -170,6 +170,22 @@ export function useProposalTable() {
     return col.id;
   }, [columns]);
 
+  const duplicateColumn = useCallback(async (colId: string) => {
+    const src = columns.find(c => c.id === colId);
+    if (!src) return;
+    const maxOrder = Math.max(...columns.map(c => c.order));
+    const copy: Column = {
+      ...src,
+      id: uid('col'),
+      name: `${src.name} (copy)`,
+      order: maxOrder + 1,
+    };
+    localInserts.current.add(copy.id);
+    setColumns(prev => [...prev, copy].sort((a, b) => a.order - b.order));
+    const { error } = await supabase.from('proposal_columns').insert(copy);
+    if (error) setColumns(prev => prev.filter(c => c.id !== copy.id));
+  }, [columns]);
+
   const deleteColumn = useCallback(async (colId: string) => {
     setColumns(prev => prev.filter(c => c.id !== colId));
     setRows(prev => prev.map(r => {
@@ -282,7 +298,7 @@ export function useProposalTable() {
     rows, loading, error,
     addRow, duplicateRow, deleteRow, updateCell,
     addColumn, deleteColumn, renameColumn, changeColumnType,
-    resizeColumn, reorderColumns, setColumnWidth: resizeColumn,
+    resizeColumn, reorderColumns, setColumnWidth: resizeColumn, duplicateColumn,
     addDropdownOption, updateDropdownOption, deleteDropdownOption,
   };
 }
