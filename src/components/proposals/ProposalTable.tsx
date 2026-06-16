@@ -1,9 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { Copy, Trash2 } from 'lucide-react';
-import type { Column, Row } from '../../types/proposals';
+import type { Column, Row, ColumnType } from '../../types/proposals';
 import { TableCell } from './TableCell';
 import { ColHeaderMenu } from './ColHeaderMenu';
-import type { ColumnType } from '../../types/proposals';
 
 interface ProposalTableProps {
   columns: Column[];
@@ -21,8 +20,16 @@ interface ProposalTableProps {
   onDeleteOption: (colId: string, optId: string) => void;
 }
 
-const ROW_HEIGHT = 38;
-const ACTION_COL_WIDTH = 76;
+const ROW_HEIGHT = 40;
+const ID_COL_WIDTH = 90;
+const ACTION_COL_WIDTH = 72;
+
+// Short display ID from the full row id
+const shortId = (id: string) => {
+  const parts = id.split('_');
+  const raw = parts[parts.length - 1] ?? id;
+  return raw.slice(0, 6).toUpperCase();
+};
 
 export const ProposalTable: React.FC<ProposalTableProps> = ({
   columns, rows,
@@ -30,147 +37,140 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
   onRenameColumn, onChangeColumnType, onDeleteColumn, onMoveColumn, onResizeColumn,
   onAddOption, onUpdateOption, onDeleteOption,
 }) => {
-  // ── Column resize drag ───────────────────────────────────────────────────
+  // ── Column resize ────────────────────────────────────────────────────────
   const resizingRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
 
-  const startResize = (e: React.MouseEvent, colId: string, currentWidth: number) => {
+  const startResize = useCallback((e: React.MouseEvent, colId: string, currentWidth: number) => {
     e.preventDefault();
+    e.stopPropagation();
     resizingRef.current = { colId, startX: e.clientX, startWidth: currentWidth };
 
-    const onMouseMove = (ev: MouseEvent) => {
+    const onMove = (ev: MouseEvent) => {
       if (!resizingRef.current) return;
-      const delta = ev.clientX - resizingRef.current.startX;
-      const newW = Math.max(80, resizingRef.current.startWidth + delta);
-      onResizeColumn(resizingRef.current.colId, newW);
+      onResizeColumn(resizingRef.current.colId, resizingRef.current.startWidth + ev.clientX - resizingRef.current.startX);
     };
-
-    const onMouseUp = () => {
+    const onUp = () => {
       resizingRef.current = null;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
     };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [onResizeColumn]);
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
+  // ── Delete confirmation per-row (tooltip style, single confirm) ──────────
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Row number column width ──────────────────────────────────────────────
-  const rowNumWidth = 40;
-
-  // ── Confirm delete ───────────────────────────────────────────────────────
-  const [confirmDeleteRow, setConfirmDeleteRow] = useState<string | null>(null);
-  const [confirmDeleteCol, setConfirmDeleteCol] = useState<string | null>(null);
-
-  const handleDeleteRow = (rowId: string) => {
-    if (confirmDeleteRow === rowId) { onDeleteRow(rowId); setConfirmDeleteRow(null); }
-    else { setConfirmDeleteRow(rowId); setTimeout(() => setConfirmDeleteRow(null), 2500); }
-  };
-
-  const handleDeleteCol = (colId: string) => {
-    if (confirmDeleteCol === colId) { onDeleteColumn(colId); setConfirmDeleteCol(null); }
-    else { setConfirmDeleteCol(colId); setTimeout(() => setConfirmDeleteCol(null), 2500); }
-  };
+  const handleDeleteClick = useCallback((rowId: string) => {
+    if (pendingDelete === rowId) {
+      // Second click — confirmed
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setPendingDelete(null);
+      onDeleteRow(rowId);
+    } else {
+      // First click — arm it
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setPendingDelete(rowId);
+      deleteTimerRef.current = setTimeout(() => setPendingDelete(null), 3000);
+    }
+  }, [pendingDelete, onDeleteRow]);
 
   if (columns.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-slate-400 text-sm">No columns yet. Click <strong>Add Column</strong> to get started.</p>
+      <div className="flex items-center justify-center py-20 bg-white rounded-xl border border-slate-200">
+        <p className="text-sm text-slate-400">No columns yet. Click <strong className="text-slate-600">Add Column</strong> to get started.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200"
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
     >
-      <table className="border-collapse table-fixed bg-white" style={{ minWidth: '100%' }}>
+      <table className="border-collapse table-fixed" style={{ minWidth: '100%' }}>
         <colgroup>
-          {/* Row # */}
-          <col style={{ width: rowNumWidth }} />
-          {columns.map(col => (
-            <col key={col.id} style={{ width: col.width }} />
-          ))}
-          {/* Actions */}
-          <col style={{ width: ACTION_COL_WIDTH }} />
+          <col style={{ width: ID_COL_WIDTH, minWidth: ID_COL_WIDTH }} />
+          {columns.map(col => <col key={col.id} style={{ width: col.width, minWidth: col.width }} />)}
+          <col style={{ width: ACTION_COL_WIDTH, minWidth: ACTION_COL_WIDTH }} />
         </colgroup>
 
         {/* ── Header ── */}
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200">
-            {/* Row # header */}
-            <th className="border-r border-slate-200 text-center" style={{ height: 40, width: rowNumWidth }}>
-              <span className="text-xs text-slate-400 font-medium">#</span>
+            {/* ID column header */}
+            <th className="border-r border-slate-200 text-left px-3" style={{ height: 40, width: ID_COL_WIDTH }}>
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">ID</span>
             </th>
 
             {columns.map((col, idx) => (
-              <th
-                key={col.id}
-                className="border-r border-slate-200 text-left relative group"
+              <th key={col.id}
+                className="border-r border-slate-200 text-left relative group/th"
                 style={{ height: 40, width: col.width }}
               >
-                <div className="flex items-center gap-1 px-2.5 h-full">
+                <div className="flex items-center gap-1 px-2.5 h-full overflow-hidden">
                   <span className="text-xs font-semibold text-slate-600 truncate flex-1 select-none">
                     {col.name}
                   </span>
-                  <ColHeaderMenu
-                    column={col}
-                    isFirst={idx === 0}
-                    isLast={idx === columns.length - 1}
-                    onRename={name => onRenameColumn(col.id, name)}
-                    onChangeType={type => onChangeColumnType(col.id, type)}
-                    onDelete={() => handleDeleteCol(col.id)}
-                    onMoveLeft={() => onMoveColumn(col.id, 'left')}
-                    onMoveRight={() => onMoveColumn(col.id, 'right')}
-                    onAddOption={(label, color) => onAddOption(col.id, label, color)}
-                    onUpdateOption={(optId, label, color) => onUpdateOption(col.id, optId, label, color)}
-                    onDeleteOption={optId => onDeleteOption(col.id, optId)}
-                  />
+                  <div className="flex-shrink-0">
+                    <ColHeaderMenu
+                      column={col}
+                      isFirst={idx === 0}
+                      isLast={idx === columns.length - 1}
+                      onRename={name => onRenameColumn(col.id, name)}
+                      onChangeType={type => onChangeColumnType(col.id, type)}
+                      onDelete={() => onDeleteColumn(col.id)}
+                      onMoveLeft={() => onMoveColumn(col.id, 'left')}
+                      onMoveRight={() => onMoveColumn(col.id, 'right')}
+                      onAddOption={(label, color) => onAddOption(col.id, label, color)}
+                      onUpdateOption={(optId, label, color) => onUpdateOption(col.id, optId, label, color)}
+                      onDeleteOption={optId => onDeleteOption(col.id, optId)}
+                    />
+                  </div>
                 </div>
                 {/* Resize handle */}
                 <div
-                  className="absolute right-0 top-0 w-2 h-full cursor-col-resize hover:bg-blue-400 hover:opacity-50 transition-opacity z-10 group-hover:opacity-100 opacity-0"
+                  className="absolute right-0 top-0 w-1.5 h-full cursor-col-resize z-10 group-hover/th:bg-blue-300 group-hover/th:opacity-40 transition-opacity"
                   onMouseDown={e => startResize(e, col.id, col.width)}
                 />
-                {/* Delete confirm flash */}
-                {confirmDeleteCol === col.id && (
-                  <div className="absolute top-full left-0 mt-1 z-50 bg-red-500 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap shadow-lg">
-                    Click again to delete
-                  </div>
-                )}
               </th>
             ))}
 
             {/* Actions header */}
             <th className="text-center" style={{ height: 40, width: ACTION_COL_WIDTH }}>
-              <span className="text-xs text-slate-400 font-medium">Actions</span>
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Actions</span>
             </th>
           </tr>
         </thead>
 
         {/* ── Body ── */}
         <tbody>
-          {rows.length === 0 && (
+          {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length + 2} className="text-center py-12 text-sm text-slate-400">
-                No rows yet. Click <strong className="text-slate-600">Add Row</strong> to add your first record.
+              <td colSpan={columns.length + 2} className="text-center py-14 text-sm text-slate-400">
+                No rows yet — click <strong className="text-slate-600">Add Row</strong> to get started.
               </td>
             </tr>
-          )}
-          {rows.map((row, rowIdx) => (
+          ) : rows.map(row => (
             <tr
               key={row.id}
-              className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors group/row"
+              className="border-b border-slate-100 last:border-0 hover:bg-blue-50/30 transition-colors group/row"
               style={{ height: ROW_HEIGHT }}
             >
-              {/* Row number */}
-              <td className="border-r border-slate-100 text-center" style={{ width: rowNumWidth }}>
-                <span className="text-xs text-slate-400 font-medium tabular-nums">{rowIdx + 1}</span>
+              {/* Unique ID cell */}
+              <td className="border-r border-slate-100 px-3" style={{ width: ID_COL_WIDTH }}>
+                <span
+                  className="text-xs font-mono font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded select-all"
+                  title={row.id}
+                >
+                  {shortId(row.id)}
+                </span>
               </td>
 
+              {/* Data cells */}
               {columns.map(col => (
-                <td
-                  key={col.id}
-                  className="border-r border-slate-100 p-0 relative"
+                <td key={col.id}
+                  className="border-r border-slate-100 p-0"
                   style={{ width: col.width, maxWidth: col.width, height: ROW_HEIGHT }}
                 >
                   <TableCell
@@ -184,6 +184,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               {/* Actions */}
               <td className="text-center" style={{ width: ACTION_COL_WIDTH }}>
                 <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                  {/* Duplicate */}
                   <button
                     onClick={() => onDuplicateRow(row.id)}
                     title="Duplicate row"
@@ -191,17 +192,27 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                   >
                     <Copy size={13} />
                   </button>
-                  <button
-                    onClick={() => handleDeleteRow(row.id)}
-                    title={confirmDeleteRow === row.id ? 'Click to confirm' : 'Delete row'}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      confirmDeleteRow === row.id
-                        ? 'text-white bg-red-500 hover:bg-red-600'
-                        : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
-                    }`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+
+                  {/* Delete — single click with tooltip confirm */}
+                  <div className="relative">
+                    <button
+                      onClick={() => handleDeleteClick(row.id)}
+                      title={pendingDelete === row.id ? 'Click again to confirm' : 'Delete row'}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        pendingDelete === row.id
+                          ? 'text-white bg-red-500 scale-110'
+                          : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+                      }`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                    {pendingDelete === row.id && (
+                      <div className="absolute bottom-full right-0 mb-1.5 bg-slate-800 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap pointer-events-none z-50">
+                        Click again to delete
+                        <div className="absolute top-full right-2 border-4 border-transparent border-t-slate-800" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </td>
             </tr>
