@@ -13,7 +13,7 @@ export const ProposalsPage: React.FC = () => {
     columns, rows, loading, error,
     addRow, duplicateRow, deleteRow, updateCell,
     addColumn, deleteColumn, renameColumn, changeColumnType,
-    resizeColumn, moveColumn,
+    resizeColumn, reorderColumns,
     addDropdownOption, updateDropdownOption, deleteDropdownOption,
   } = useProposalTable();
 
@@ -169,7 +169,7 @@ export const ProposalsPage: React.FC = () => {
         onRenameColumn={renameColumn}
         onChangeColumnType={changeColumnType}
         onDeleteColumn={deleteColumn}
-        onMoveColumn={moveColumn}
+        onReorderColumns={reorderColumns}
         onResizeColumn={resizeColumn}
         onAddOption={addDropdownOption}
         onUpdateOption={updateDropdownOption}

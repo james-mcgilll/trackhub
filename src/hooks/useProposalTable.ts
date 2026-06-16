@@ -209,22 +209,29 @@ export function useProposalTable() {
     await supabase.from('proposal_columns').update({ width: w }).eq('id', colId);
   }, []);
 
-  const moveColumn = useCallback(async (colId: string, direction: 'left' | 'right') => {
+  // Reorder: place sourceId before or after targetId
+  const reorderColumns = useCallback(async (sourceId: string, targetId: string, position: 'before' | 'after') => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+
     setColumns(prev => {
       const sorted = [...prev].sort((a, b) => a.order - b.order);
-      const idx = sorted.findIndex(c => c.id === colId);
-      const swapIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= sorted.length) return prev;
-      const [a, b] = [sorted[idx], sorted[swapIdx]];
-      Promise.all([
-        supabase.from('proposal_columns').update({ order: b.order }).eq('id', a.id),
-        supabase.from('proposal_columns').update({ order: a.order }).eq('id', b.id),
-      ]);
-      return prev.map(c => {
-        if (c.id === a.id) return { ...c, order: b.order };
-        if (c.id === b.id) return { ...c, order: a.order };
-        return c;
-      }).sort((a, b) => a.order - b.order);
+      // Remove source from list
+      const without = sorted.filter(c => c.id !== sourceId);
+      const targetIdx = without.findIndex(c => c.id === targetId);
+      if (targetIdx === -1) return prev;
+      const insertAt = position === 'before' ? targetIdx : targetIdx + 1;
+      const source = sorted.find(c => c.id === sourceId)!;
+      without.splice(insertAt, 0, source);
+      // Reassign orders 0,1,2,...
+      const reordered = without.map((c, i) => ({ ...c, order: i }));
+      // Persist all changed orders to DB
+      reordered.forEach(c => {
+        const original = sorted.find(x => x.id === c.id);
+        if (original?.order !== c.order) {
+          supabase.from('proposal_columns').update({ order: c.order }).eq('id', c.id);
+        }
+      });
+      return reordered;
     });
   }, []);
 
@@ -275,7 +282,7 @@ export function useProposalTable() {
     rows, loading, error,
     addRow, duplicateRow, deleteRow, updateCell,
     addColumn, deleteColumn, renameColumn, changeColumnType,
-    resizeColumn, moveColumn, setColumnWidth: resizeColumn,
+    resizeColumn, reorderColumns, setColumnWidth: resizeColumn,
     addDropdownOption, updateDropdownOption, deleteDropdownOption,
   };
 }
