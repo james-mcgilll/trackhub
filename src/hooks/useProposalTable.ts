@@ -3,20 +3,33 @@ import { supabase } from '../utils/supabase';
 import { seedIfEmpty } from '../utils/seedData';
 import type { Column, Row, ColumnType } from '../types/proposals';
 
+// ─── Generate next UP-style ID from existing rows ────────────────────────────
+function nextRowDisplayId(existingRows: Row[]): string {
+  let max = 0;
+  for (const r of existingRows) {
+    const n = parseInt(r.display_id?.replace('UP', '') ?? '0', 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return `UP${String(max + 1).padStart(3, '0')}`;
+}
+
 const uid = (prefix = 'id') =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 export function useProposalTable() {
   const [columns, setColumns] = useState<Column[]>([]);
-  const [rows, setRows]       = useState<Row[]>([]);
+  const [rows,    setRows]    = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
-  // Track IDs we inserted/deleted locally so realtime echo doesn't double-apply
+  // Suppress realtime echo for changes we made locally
   const localInserts = useRef<Set<string>>(new Set());
   const localDeletes = useRef<Set<string>>(new Set());
+  // Keep latest rows in a ref so callbacks don't go stale
+  const rowsRef = useRef<Row[]>([]);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
 
-  // ── Initial load ─────────────────────────────────────────────────────────
+  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -41,104 +54,115 @@ export function useProposalTable() {
 
   // ── Real-time subscriptions ───────────────────────────────────────────────
   useEffect(() => {
-    const rowChannel = supabase
-      .channel('proposal_rows_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const r = payload.new as Row;
+    const rowCh = supabase
+      .channel('rows_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' }, ({ eventType, new: n, old: o }) => {
+        if (eventType === 'INSERT') {
+          const r = n as Row;
           if (localInserts.current.has(r.id)) { localInserts.current.delete(r.id); return; }
           setRows(prev => prev.find(x => x.id === r.id) ? prev : [...prev, r]);
         }
-        if (payload.eventType === 'UPDATE') {
-          const r = payload.new as Row;
+        if (eventType === 'UPDATE') {
+          const r = n as Row;
           setRows(prev => prev.map(x => x.id === r.id ? r : x));
         }
-        if (payload.eventType === 'DELETE') {
-          const r = payload.old as Row;
+        if (eventType === 'DELETE') {
+          const r = o as Row;
           if (localDeletes.current.has(r.id)) { localDeletes.current.delete(r.id); return; }
           setRows(prev => prev.filter(x => x.id !== r.id));
         }
       })
       .subscribe();
 
-    const colChannel = supabase
-      .channel('proposal_columns_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_columns' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const c = payload.new as Column;
+    const colCh = supabase
+      .channel('cols_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_columns' }, ({ eventType, new: n, old: o }) => {
+        if (eventType === 'INSERT') {
+          const c = n as Column;
           if (localInserts.current.has(c.id)) { localInserts.current.delete(c.id); return; }
           setColumns(prev => prev.find(x => x.id === c.id) ? prev : [...prev, c].sort((a, b) => a.order - b.order));
         }
-        if (payload.eventType === 'UPDATE') {
-          const c = payload.new as Column;
+        if (eventType === 'UPDATE') {
+          const c = n as Column;
           setColumns(prev => prev.map(x => x.id === c.id ? c : x).sort((a, b) => a.order - b.order));
         }
-        if (payload.eventType === 'DELETE') {
-          const c = payload.old as Column;
+        if (eventType === 'DELETE') {
+          const c = o as Column;
           setColumns(prev => prev.filter(x => x.id !== c.id));
         }
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(rowChannel);
-      supabase.removeChannel(colChannel);
+      supabase.removeChannel(rowCh);
+      supabase.removeChannel(colCh);
     };
   }, []);
 
-  // ── Row operations — optimistic first ────────────────────────────────────
+  // ── Row operations ────────────────────────────────────────────────────────
 
   const addRow = useCallback(async () => {
-    const newRow: Row = { id: uid('row'), data: {}, created_at: new Date().toISOString() };
+    const displayId = nextRowDisplayId(rowsRef.current);
+    const newRow: Row = {
+      id: uid('row'),
+      display_id: displayId,
+      data: {},
+      created_at: new Date().toISOString(),
+    };
     localInserts.current.add(newRow.id);
     setRows(prev => [...prev, newRow]);
     const { error } = await supabase.from('proposal_rows').insert(newRow);
-    if (error) { setRows(prev => prev.filter(r => r.id !== newRow.id)); }
+    if (error) setRows(prev => prev.filter(r => r.id !== newRow.id));
   }, []);
 
   const duplicateRow = useCallback(async (rowId: string) => {
+    const src = rowsRef.current.find(r => r.id === rowId);
+    if (!src) return;
+    const displayId = nextRowDisplayId(rowsRef.current);
+    const copy: Row = {
+      id: uid('row'),
+      display_id: displayId,
+      data: { ...src.data },
+      created_at: new Date().toISOString(),
+    };
+    localInserts.current.add(copy.id);
     setRows(prev => {
-      const src = prev.find(r => r.id === rowId);
-      if (!src) return prev;
-      const copy: Row = { id: uid('row'), data: { ...src.data }, created_at: new Date().toISOString() };
-      localInserts.current.add(copy.id);
-      supabase.from('proposal_rows').insert(copy).then(({ error }) => {
-        if (error) setRows(p => p.filter(r => r.id !== copy.id));
-      });
       const idx = prev.findIndex(r => r.id === rowId);
       const next = [...prev];
       next.splice(idx + 1, 0, copy);
       return next;
     });
+    const { error } = await supabase.from('proposal_rows').insert(copy);
+    if (error) setRows(prev => prev.filter(r => r.id !== copy.id));
   }, []);
 
   const deleteRow = useCallback(async (rowId: string) => {
     localDeletes.current.add(rowId);
+    const snapshot = rowsRef.current.find(r => r.id === rowId);
     setRows(prev => prev.filter(r => r.id !== rowId));
     const { error } = await supabase.from('proposal_rows').delete().eq('id', rowId);
-    if (error) {
-      // rollback
-      const { data } = await supabase.from('proposal_rows').select('*').eq('id', rowId).single();
-      if (data) setRows(prev => [...prev, data as Row]);
-    }
+    if (error && snapshot) setRows(prev => [...prev, snapshot]);
   }, []);
 
   const updateCell = useCallback(async (rowId: string, colId: string, value: string) => {
+    // Get current data from ref (avoids stale closure)
+    const row = rowsRef.current.find(r => r.id === rowId);
+    if (!row) return;
+    const newData = { ...row.data, [colId]: value };
     // Optimistic
-    let mergedData: Record<string, string> = {};
-    setRows(prev => prev.map(r => {
-      if (r.id !== rowId) return r;
-      mergedData = { ...r.data, [colId]: value };
-      return { ...r, data: mergedData };
-    }));
-    await supabase.from('proposal_rows').update({ data: mergedData }).eq('id', rowId);
+    setRows(prev => prev.map(r => r.id === rowId ? { ...r, data: newData } : r));
+    await supabase.from('proposal_rows').update({ data: newData }).eq('id', rowId);
   }, []);
 
-  // ── Column operations — optimistic first ─────────────────────────────────
+  // ── Column operations ─────────────────────────────────────────────────────
 
   const addColumn = useCallback(async (name: string, type: ColumnType) => {
     const maxOrder = columns.length > 0 ? Math.max(...columns.map(c => c.order)) : -1;
-    const col: Column = { id: uid('col'), name, type, width: 160, order: maxOrder + 1, options: type === 'dropdown' ? [] : null };
+    const col: Column = {
+      id: uid('col'), name, type,
+      width: 160, order: maxOrder + 1,
+      options: type === 'dropdown' ? [] : null,
+    };
     localInserts.current.add(col.id);
     setColumns(prev => [...prev, col].sort((a, b) => a.order - b.order));
     const { error } = await supabase.from('proposal_columns').insert(col);
@@ -148,8 +172,10 @@ export function useProposalTable() {
 
   const deleteColumn = useCallback(async (colId: string) => {
     setColumns(prev => prev.filter(c => c.id !== colId));
-    setRows(prev => prev.map(r => { const { [colId]: _, ...rest } = r.data; return { ...r, data: rest }; }));
-    // sync all rows then delete col
+    setRows(prev => prev.map(r => {
+      const { [colId]: _, ...rest } = r.data;
+      return { ...r, data: rest };
+    }));
     const { data: allRows } = await supabase.from('proposal_rows').select('*');
     if (allRows) {
       await Promise.all((allRows as Row[]).map(r => {
@@ -166,9 +192,15 @@ export function useProposalTable() {
   }, []);
 
   const changeColumnType = useCallback(async (colId: string, type: ColumnType) => {
-    setColumns(prev => prev.map(c => c.id === colId ? { ...c, type, options: type === 'dropdown' ? (c.options ?? []) : null } : c));
+    setColumns(prev => prev.map(c =>
+      c.id === colId
+        ? { ...c, type, options: type === 'dropdown' ? (c.options ?? []) : null }
+        : c
+    ));
     const col = columns.find(c => c.id === colId);
-    await supabase.from('proposal_columns').update({ type, options: type === 'dropdown' ? (col?.options ?? []) : null }).eq('id', colId);
+    await supabase.from('proposal_columns')
+      .update({ type, options: type === 'dropdown' ? (col?.options ?? []) : null })
+      .eq('id', colId);
   }, [columns]);
 
   const resizeColumn = useCallback(async (colId: string, width: number) => {
@@ -230,11 +262,13 @@ export function useProposalTable() {
       r.data[colId] === optId ? { ...r, data: { ...r.data, [colId]: '' } } : r
     ));
     await supabase.from('proposal_columns').update({ options: newOptions }).eq('id', colId);
-    const affected = rows.filter(r => r.data[colId] === optId);
+    const affected = rowsRef.current.filter(r => r.data[colId] === optId);
     await Promise.all(affected.map(r =>
-      supabase.from('proposal_rows').update({ data: { ...r.data, [colId]: '' } }).eq('id', r.id)
+      supabase.from('proposal_rows')
+        .update({ data: { ...r.data, [colId]: '' } })
+        .eq('id', r.id)
     ));
-  }, [rows]);
+  }, []);
 
   return {
     columns: [...columns].sort((a, b) => a.order - b.order),

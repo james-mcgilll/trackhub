@@ -20,15 +20,14 @@ const DEFAULT_COLUMNS = [
 ];
 
 const DEFAULT_ROWS = [
-  { id: 'row_1', data: { col_client: 'Acme Corp',        col_title: 'Website Redesign Phase 2',  col_value: '45000',  col_date: '2024-12-05', col_status: 'opt_sent',     col_link: 'https://example.com/p1', col_notes: 'Follow up Friday' } },
-  { id: 'row_2', data: { col_client: 'GlobalTech',       col_title: 'ERP Integration',           col_value: '120000', col_date: '2024-12-08', col_status: 'opt_review',   col_link: '', col_notes: 'Awaiting sign-off from VP' } },
-  { id: 'row_3', data: { col_client: 'NovaTech',         col_title: 'Mobile App Development',    col_value: '78000',  col_date: '2024-11-28', col_status: 'opt_accepted', col_link: 'https://example.com/p3', col_notes: 'Contract sent' } },
-  { id: 'row_4', data: { col_client: 'DataStream',       col_title: 'Analytics Dashboard',       col_value: '32000',  col_date: '2024-12-10', col_status: 'opt_draft',    col_link: '', col_notes: '' } },
-  { id: 'row_5', data: { col_client: 'Bright Solutions', col_title: 'Cloud Migration',           col_value: '95000',  col_date: '2024-12-01', col_status: 'opt_rejected', col_link: '', col_notes: 'Lost to competitor' } },
+  { id: 'row_1', display_id: 'UP001', data: { col_client: 'Acme Corp',        col_title: 'Website Redesign Phase 2', col_value: '45000',  col_date: '2024-12-05', col_status: 'opt_sent',     col_link: 'https://example.com/p1', col_notes: 'Follow up Friday' } },
+  { id: 'row_2', display_id: 'UP002', data: { col_client: 'GlobalTech',       col_title: 'ERP Integration',          col_value: '120000', col_date: '2024-12-08', col_status: 'opt_review',   col_link: '', col_notes: 'Awaiting sign-off from VP' } },
+  { id: 'row_3', display_id: 'UP003', data: { col_client: 'NovaTech',         col_title: 'Mobile App Development',   col_value: '78000',  col_date: '2024-11-28', col_status: 'opt_accepted', col_link: 'https://example.com/p3', col_notes: 'Contract sent' } },
+  { id: 'row_4', display_id: 'UP004', data: { col_client: 'DataStream',       col_title: 'Analytics Dashboard',      col_value: '32000',  col_date: '2024-12-10', col_status: 'opt_draft',    col_link: '', col_notes: '' } },
+  { id: 'row_5', display_id: 'UP005', data: { col_client: 'Bright Solutions', col_title: 'Cloud Migration',          col_value: '95000',  col_date: '2024-12-01', col_status: 'opt_rejected', col_link: '', col_notes: 'Lost to competitor' } },
 ];
 
 export async function seedIfEmpty() {
-  // Check if columns table is empty
   const { count } = await supabase
     .from('proposal_columns')
     .select('*', { count: 'exact', head: true });

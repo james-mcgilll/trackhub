@@ -1,5 +1,3 @@
-// ─── Column Types ────────────────────────────────────────────────────────────
-
 export type ColumnType = 'text' | 'number' | 'date' | 'link' | 'dropdown';
 
 export interface DropdownOption {
@@ -17,17 +15,14 @@ export interface Column {
   options?: DropdownOption[] | null;
 }
 
-// ─── Row / Cell ──────────────────────────────────────────────────────────────
-
 export type RowData = Record<string, string>;
 
 export interface Row {
   id: string;
+  display_id: string;       // UP001, UP002, ...
   data: RowData;
-  created_at?: number | string;
+  created_at?: string;
 }
-
-// ─── Table State ─────────────────────────────────────────────────────────────
 
 export interface TableState {
   columns: Column[];
@@ -35,8 +30,6 @@ export interface TableState {
 }
 
 export const STORAGE_KEY = 'trackhub_proposals_v1';
-
-// ─── Dropdown option colors ───────────────────────────────────────────────────
 
 export const OPTION_COLORS = [
   { label: 'Blue',   value: 'blue'   },
