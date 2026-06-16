@@ -73,58 +73,45 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     document.addEventListener('mouseup', onUp);
   }, [onResizeColumn]);
 
-  // ── Drag-and-drop column reordering ──────────────────────────────────────
-  const [dragColId, setDragColId]       = useState<string | null>(null);
-  const [dropTarget, setDropTarget]     = useState<{ id: string; position: 'before' | 'after' } | null>(null);
-  const dragColIdRef                    = useRef<string | null>(null);
+  // ── Drag-and-drop ONLY from grip handle ───────────────────────────────────
+  // We use a ghost div that is draggable, not the th itself.
+  const [dragColId, setDragColId]   = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
+  const dragIdRef = useRef<string | null>(null);
 
-  const handleDragStart = useCallback((e: React.DragEvent, colId: string) => {
-    dragColIdRef.current = colId;
+  const handleGripDragStart = useCallback((e: React.DragEvent, colId: string) => {
+    dragIdRef.current = colId;
     setDragColId(colId);
     e.dataTransfer.effectAllowed = 'move';
-    // Transparent drag image so our custom styling shows
-    const ghost = document.createElement('div');
-    ghost.style.position = 'absolute';
-    ghost.style.top = '-999px';
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 0, 0);
-    setTimeout(() => document.body.removeChild(ghost), 0);
+    e.dataTransfer.setData('text/plain', colId);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, colId: string) => {
+  const handleThDragOver = useCallback((e: React.DragEvent, colId: string) => {
+    if (!dragIdRef.current || dragIdRef.current === colId) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (!dragColIdRef.current || dragColIdRef.current === colId) {
-      setDropTarget(null);
-      return;
-    }
-    // Determine if dropping before or after based on cursor X within the header cell
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const position: 'before' | 'after' = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-    setDropTarget({ id: colId, position });
+    setDropTarget(prev =>
+      prev?.id === colId && prev?.position === position ? prev : { id: colId, position }
+    );
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear if leaving the table entirely (not just moving between cells)
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDropTarget(null);
-    }
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent, targetColId: string) => {
+  const handleThDrop = useCallback((e: React.DragEvent, targetColId: string) => {
     e.preventDefault();
-    const sourceId = dragColIdRef.current;
-    if (!sourceId || sourceId === targetColId || !dropTarget) return;
-    onReorderColumns(sourceId, targetColId, dropTarget.position);
+    const sourceId = dragIdRef.current;
+    if (sourceId && sourceId !== targetColId && dropTarget) {
+      onReorderColumns(sourceId, targetColId, dropTarget.position);
+    }
+    dragIdRef.current = null;
     setDragColId(null);
     setDropTarget(null);
-    dragColIdRef.current = null;
   }, [dropTarget, onReorderColumns]);
 
   const handleDragEnd = useCallback(() => {
+    dragIdRef.current = null;
     setDragColId(null);
     setDropTarget(null);
-    dragColIdRef.current = null;
   }, []);
 
   // ── Delete confirm ────────────────────────────────────────────────────────
@@ -156,7 +143,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
   return (
     <div ref={tableRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-      <table className="border-collapse table-fixed select-none" style={{ minWidth: '100%' }}>
+      <table className="border-collapse table-fixed" style={{ minWidth: '100%' }}>
         <colgroup>
           <col style={{ width: ID_COL_WIDTH }} />
           {columns.map(col => <col key={col.id} style={{ width: col.width }} />)}
@@ -166,7 +153,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
         {/* ── Header ── */}
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200">
-            {/* ID column — not draggable */}
+            {/* ID col — static */}
             <th className="border-r border-slate-200 text-left px-3" style={{ height: 40 }}>
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">ID</span>
             </th>
@@ -177,41 +164,39 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               const isDropAfter  = dropTarget?.id === col.id && dropTarget.position === 'after';
 
               return (
-                <th key={col.id}
-                  draggable
-                  onDragStart={e => handleDragStart(e, col.id)}
-                  onDragOver={e => handleDragOver(e, col.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={e => handleDrop(e, col.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`
-                    border-r border-slate-200 text-left relative group/th transition-all duration-150
-                    ${isDragging ? 'opacity-40 bg-blue-50' : ''}
-                  `}
+                <th
+                  key={col.id}
+                  /* NOTE: NO draggable here — only the grip handle is draggable */
+                  onDragOver={e => handleThDragOver(e, col.id)}
+                  onDrop={e => handleThDrop(e, col.id)}
+                  onDragLeave={() => setDropTarget(null)}
+                  className={`border-r border-slate-200 text-left relative group/th transition-colors ${
+                    isDragging ? 'opacity-40 bg-blue-50' : ''
+                  }`}
                   style={{ height: 40, width: col.width }}
                 >
-                  {/* Drop indicator — left edge */}
-                  {isDropBefore && (
-                    <div className="absolute left-0 top-0 w-0.5 h-full bg-blue-500 z-20 shadow-sm shadow-blue-300" />
-                  )}
-                  {/* Drop indicator — right edge */}
-                  {isDropAfter && (
-                    <div className="absolute right-0 top-0 w-0.5 h-full bg-blue-500 z-20 shadow-sm shadow-blue-300" />
-                  )}
+                  {/* Drop indicators */}
+                  {isDropBefore && <div className="absolute left-0 top-0 w-0.5 h-full bg-blue-500 z-20" />}
+                  {isDropAfter  && <div className="absolute right-0 top-0 w-0.5 h-full bg-blue-500 z-20" />}
 
-                  <div className="flex items-center gap-1 px-1.5 h-full overflow-hidden">
-                    {/* Drag handle */}
+                  <div className="flex items-center h-full px-1.5 gap-1 overflow-hidden">
+                    {/* Grip handle — THIS is the only draggable element */}
                     <div
-                      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 transition-colors opacity-0 group-hover/th:opacity-100 p-0.5 rounded"
+                      draggable
+                      onDragStart={e => handleGripDragStart(e, col.id)}
+                      onDragEnd={handleDragEnd}
+                      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 opacity-0 group-hover/th:opacity-100 p-0.5 rounded transition-colors"
                       title="Drag to reorder"
                     >
                       <GripVertical size={13} />
                     </div>
 
-                    <span className="text-xs font-semibold text-slate-600 truncate flex-1 select-none cursor-grab active:cursor-grabbing">
+                    {/* Column name */}
+                    <span className="text-xs font-semibold text-slate-600 truncate flex-1 select-none">
                       {col.name}
                     </span>
 
+                    {/* Settings menu — NOT inside a draggable element */}
                     <ColHeaderMenu
                       column={col}
                       isFirst={idx === 0}
@@ -259,33 +244,32 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
 
               {/* ID */}
               <td className="border-r border-slate-100 px-3" style={{ width: ID_COL_WIDTH }}>
-                <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all" title={row.id}>
+                <span
+                  className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all"
+                  title={row.id}
+                >
                   {row.display_id || `UP${String(rowIdx + 1).padStart(3, '0')}`}
                 </span>
               </td>
 
-              {/* Data cells */}
-              {columns.map((col, colIdx) => {
-                const isDraggingCol = dragColId === col.id;
-                return (
-                  <td key={col.id}
-                    className={`border-r border-slate-100 p-0 transition-opacity ${isDraggingCol ? 'opacity-30' : ''}`}
-                    style={{ width: col.width, height: ROW_HEIGHT }}>
-                    <TableCell
-                      column={col}
-                      value={row.data[col.id] ?? ''}
-                      rowId={row.id}
-                      colIndex={colIdx}
-                      rowIndex={rowIdx}
-                      totalCols={columns.length}
-                      totalRows={rows.length}
-                      cellKey={`${rowIdx}-${colIdx}`}
-                      onChange={val => onUpdateCell(row.id, col.id, val)}
-                      onNavigate={(rd, cd) => handleNavigate(rowIdx, colIdx, rd, cd)}
-                    />
-                  </td>
-                );
-              })}
+              {columns.map((col, colIdx) => (
+                <td key={col.id}
+                  className={`border-r border-slate-100 p-0 transition-opacity ${dragColId === col.id ? 'opacity-30' : ''}`}
+                  style={{ width: col.width, height: ROW_HEIGHT }}>
+                  <TableCell
+                    column={col}
+                    value={row.data[col.id] ?? ''}
+                    rowId={row.id}
+                    colIndex={colIdx}
+                    rowIndex={rowIdx}
+                    totalCols={columns.length}
+                    totalRows={rows.length}
+                    cellKey={`${rowIdx}-${colIdx}`}
+                    onChange={val => onUpdateCell(row.id, col.id, val)}
+                    onNavigate={(rd, cd) => handleNavigate(rowIdx, colIdx, rd, cd)}
+                  />
+                </td>
+              ))}
 
               {/* Actions */}
               <td className="text-center" style={{ width: ACTION_COL_WIDTH }}>
@@ -321,8 +305,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
       {/* Drag hint */}
       {dragColId && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-full shadow-lg pointer-events-none z-50 flex items-center gap-1.5">
-          <GripVertical size={12} />
-          Drop to reorder column
+          <GripVertical size={12} /> Drop to reorder column
         </div>
       )}
     </div>
