@@ -59,14 +59,17 @@ export const ProposalsPage: React.FC = () => {
 
   // Export
   const handleExport = () => {
-    const headers = columns.map(c => `"${c.name}"`).join(',');
-    const lines = rows.map(row =>
-      columns.map(col => {
+    // Include Unique ID as first column
+    const headers = ['"Unique ID"', ...columns.map(c => `"${c.name}"`)].join(',');
+    const lines = rows.map(row => {
+      const idCell = `"${row.display_id ?? ''}"`;
+      const dataCells = columns.map(col => {
         let v = row.data[col.id] ?? '';
         if (col.type === 'dropdown') v = col.options?.find(o => o.id === v)?.label ?? '';
         return `"${v.replace(/"/g, '""')}"`;
-      }).join(',')
-    );
+      });
+      return [idCell, ...dataCells].join(',');
+    });
     const csv = [headers, ...lines].join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

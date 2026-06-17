@@ -66,6 +66,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
   const autoMap = useCallback((headers: string[], cols: Column[]) => {
     const map: Record<string, string> = {};
     headers.forEach(h => {
+      // Special: "Unique ID" maps to the display_id field
+      if (h.toLowerCase().trim() === 'unique id') {
+        map[h] = '__unique_id__';
+        return;
+      }
       const match = cols.find(c =>
         c.name.toLowerCase().trim() === h.toLowerCase().trim()
       );
@@ -122,7 +127,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
   };
 
   const handleImport = () => {
-    // Compute starting display ID
+    // Track which CSV header is mapped to Unique ID (if any)
+    const uniqueIdHeader = Object.entries(mapping).find(([, v]) => v === '__unique_id__')?.[0] ?? null;
+
+    // Compute starting display ID for rows that don't have one
     let maxId = 0;
     for (const r of existingRows) {
       const n = parseInt((r.display_id ?? '').replace('UP', ''), 10);
@@ -132,7 +140,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
     const newRows: Omit<Row, 'id' | 'created_at'>[] = csvRows.map((csvRow) => {
       const data: Record<string, string> = {};
       Object.entries(mapping).forEach(([csvHeader, colId]) => {
-        if (!colId) return;
+        if (!colId || colId === '__unique_id__') return;
         const col = columns.find(c => c.id === colId);
         if (!col) return;
         let val = csvRow[csvHeader] ?? '';
@@ -142,11 +150,17 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
         }
         data[colId] = val;
       });
-      maxId += 1;
-      return {
-        display_id: `UP${String(maxId).padStart(3, '0')}`,
-        data,
-      };
+
+      // Use the Unique ID from CSV if mapped, otherwise auto-generate
+      let display_id: string;
+      if (uniqueIdHeader && csvRow[uniqueIdHeader]?.trim()) {
+        display_id = csvRow[uniqueIdHeader].trim();
+      } else {
+        maxId += 1;
+        display_id = `UP${String(maxId).padStart(3, '0')}`;
+      }
+
+      return { display_id, data };
     });
 
     onImport(newRows);
@@ -284,6 +298,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
                         className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white cursor-pointer"
                       >
                         <option value="">— Skip this column</option>
+                        <option value="__unique_id__">🔑 Unique ID (display_id)</option>
                         {columns.map(col => (
                           <option key={col.id} value={col.id}>{col.name}</option>
                         ))}
