@@ -6,21 +6,14 @@ import type { Column, Row, ColumnType } from '../types/proposals';
 // ── ID helpers ────────────────────────────────────────────────────────────────
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-// Global counter for display IDs — increments atomically, never collides
-let displayIdCounter = 0;
-
-function initCounter(rows: Row[]) {
+// Compute next display ID from a list of existing rows
+function nextDisplayId(existingRows: Row[]): string {
   let max = 0;
-  for (const r of rows) {
+  for (const r of existingRows) {
     const n = parseInt((r.display_id ?? '').replace('UP', ''), 10);
     if (!isNaN(n) && n > max) max = n;
   }
-  if (max > displayIdCounter) displayIdCounter = max;
-}
-
-function nextDisplayId(): string {
-  displayIdCounter += 1;
-  return `UP${String(displayIdCounter).padStart(3, '0')}`;
+  return `UP${String(max + 1).padStart(3, '0')}`;
 }
 
 // Compute next display ID — always reads from Supabase to avoid collisions
@@ -53,7 +46,6 @@ export function useProposalTable() {
         if (rr.error) throw rr.error;
         setColumns(cr.data as Column[]);
         setRows(rr.data as Row[]);
-        initCounter(rr.data as Row[]);
       } catch (e: any) {
         setError(e.message ?? 'Failed to load');
       } finally {
@@ -125,12 +117,12 @@ export function useProposalTable() {
   const addRow = useCallback(() => {
     const row: Row = {
       id: uid('row'),
-      display_id: nextDisplayId(),
+      display_id: nextDisplayId(rowsRef.current),  // read BEFORE updating ref
       data: {},
       created_at: new Date().toISOString(),
     };
 
-    // Show immediately
+    // Update ref immediately so next call computes correct next ID
     localInserts.current.add(row.id);
     rowsRef.current = [...rowsRef.current, row];
     setRows(prev => [...prev, row]);
@@ -151,7 +143,7 @@ export function useProposalTable() {
 
     const copy: Row = {
       id: uid('row'),
-      display_id: nextDisplayId(),
+      display_id: nextDisplayId(rowsRef.current),  // read BEFORE updating ref
       data: { ...src.data },
       created_at: new Date().toISOString(),
     };
