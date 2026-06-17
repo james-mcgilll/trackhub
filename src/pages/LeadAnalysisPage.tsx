@@ -11,7 +11,7 @@ const ROWS_PER_PAGE = 100;
 export const LeadAnalysisPage: React.FC = () => {
   const { columns: proposalColumns, rows: proposalRows } = useProposalTable();
   const {
-    laColumns, mergedRows,
+    laColumns, mergedRows, statusCol,
     addLinkedColumn, addLocalColumn,
     deleteColumn, renameColumn, resizeColumn, reorderColumns, updateColumnOptions,
     updateCell,
@@ -89,16 +89,28 @@ export const LeadAnalysisPage: React.FC = () => {
       />
 
       {/* Info banner */}
-      <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-        <Info size={15} className="text-blue-500 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-blue-700">Auto-populated from Proposal Details</p>
-          <p className="text-xs text-blue-600 mt-0.5">
-            Rows are automatically added when a lead reaches Contacted, Interviewed, or Hired status.
-            Add columns to enrich these leads with extra details.
-          </p>
+      {!statusCol ? (
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <Info size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-amber-700">Status column not detected</p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Make sure your Proposal Details table has a dropdown column with options: Contacted, Interviewed, Hired.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+          <Info size={15} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-blue-700">Auto-populated from Proposal Details</p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              Linked to <strong>"{statusCol.name}"</strong> column. Leads marked as Contacted, Interviewed, or Hired appear here automatically.
+              Add columns below to enrich these leads with extra details.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Status summary cards */}
       <div className="grid grid-cols-3 gap-3">

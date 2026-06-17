@@ -16,13 +16,14 @@ function lsSet(key: string, val: unknown) {
 
 // ── Detect status column from proposal columns ────────────────────────────────
 function detectStatusCol(cols: Column[]): Column | null {
+  // 1. Try name match (broad — catches "Proposal Status", "Status", "proposal_status" etc.)
   const byName = cols.find(c =>
     c.type === 'dropdown' && (
-      c.name.toLowerCase().includes('proposal status') ||
-      c.name.toLowerCase() === 'status'
+      c.name.toLowerCase().includes('status')
     )
   );
   if (byName) return byName;
+  // 2. Fallback: any dropdown whose options include at least 2 qualifying stage labels
   return cols.find(c => {
     if (c.type !== 'dropdown' || !c.options) return false;
     const labels = c.options.map(o => o.label.toLowerCase());
@@ -195,7 +196,7 @@ export function useLeadAnalysis(
     mergedRows,
     laRows,
     qualifiedUniqueIds,
-    statusCol,
+    statusCol,          // exposed so page can show which column is being used
     proposalColumns,
     addLinkedColumn,
     addLocalColumn,
