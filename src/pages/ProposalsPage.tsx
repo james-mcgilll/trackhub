@@ -71,8 +71,11 @@ export const ProposalsPage: React.FC = () => {
         Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
       if (!matchesSearch) return false;
     }
-    // Funnel filter — show rows at this stage OR BEYOND (cumulative)
+    // Funnel filter — show rows at this stage OR ANY LATER STAGE
+    // e.g. clicking "Viewed" shows Viewed + Contacted + Interviewed + Hired
+    // clicking "Submitted" shows all rows
     if (funnelFilter && statusCol && funnelMinStage >= 0) {
+      if (funnelMinStage === 0) return true; // Submitted = all rows
       const val = row.data[statusCol.id] ?? '';
       const opt = statusCol.options?.find(o => o.id === val);
       if (!opt) return false;
