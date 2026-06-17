@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import type { LAColumn, LARow } from '../types/leadAnalysis';
 import { LA_COLUMNS_KEY, LA_ROWS_KEY, LA_QUALIFYING_STAGES } from '../types/leadAnalysis';
@@ -28,56 +28,89 @@ function detectStatusCol(cols: Column[]): Column | null {
 
 export function useLeadAnalysis(
   proposalColumns: Column[],
-  proposalRows: Row[],  // kept for option label resolution
+  proposalRows: Row[],
 ) {
   const [laColumns, setLaColumns] = useState<LAColumn[]>(() => lsGet(LA_COLUMNS_KEY, []));
   const [laRows,    setLaRows]    = useState<LARow[]>(()    => lsGet(LA_ROWS_KEY,    []));
   const [loading,   setLoading]   = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string>('');
 
   useEffect(() => { lsSet(LA_COLUMNS_KEY, laColumns); }, [laColumns]);
   useEffect(() => { lsSet(LA_ROWS_KEY,    laRows);    }, [laRows]);
 
   const statusCol = useMemo(() => detectStatusCol(proposalColumns), [proposalColumns]);
 
-  // ── Core sync: fetch ALL qualifying rows directly from Supabase ─────────────
-  // This bypasses localStorage limits and always reflects current Supabase data
+  // ── Full self-contained sync from Supabase ───────────────────────────────────
+  // Fetches columns and rows fresh from Supabase — no dependency on props state
   const syncFromSupabase = useCallback(async () => {
-    if (!statusCol) return;
-
     setLoading(true);
+    setSyncStatus('Fetching columns...');
     try {
-      // Get ALL proposal rows from Supabase with no limit cap
+      // Step 1: Get columns fresh from Supabase
+      const { data: colData, error: colErr } = await supabase
+        .from('proposal_columns')
+        .select('*')
+        .order('order');
+
+      if (colErr || !colData) {
+        setSyncStatus('Failed to fetch columns — using local data');
+        syncFromProps();
+        return;
+      }
+
+      const cols = colData as Column[];
+      const sc = detectStatusCol(cols);
+
+      if (!sc) {
+        setSyncStatus('No status column found');
+        syncFromProps();
+        return;
+      }
+
+      setSyncStatus('Fetching rows...');
+
+      // Step 2: Fetch ALL rows in pages of 1000
       let allRows: Row[] = [];
       const PAGE = 1000;
       let from = 0;
       while (true) {
-        const { data, error } = await supabase
+        const { data: rowData, error: rowErr } = await supabase
           .from('proposal_rows')
           .select('id, display_id, data')
-          .order('created_at')
           .range(from, from + PAGE - 1);
-        if (error || !data || data.length === 0) break;
-        allRows = [...allRows, ...data as Row[]];
-        if (data.length < PAGE) break;
+
+        if (rowErr) { console.warn('Row fetch error:', rowErr); break; }
+        if (!rowData || rowData.length === 0) break;
+        allRows = [...allRows, ...(rowData as Row[])];
+        if (rowData.length < PAGE) break;
         from += PAGE;
       }
 
-      // Find qualifying unique IDs
-      const qualifyingIds = new Set<string>();
+      setSyncStatus(`Processing ${allRows.length} rows...`);
+
+      // Step 3: Find qualifying IDs
+      const qualifyingIds: string[] = [];
       for (const row of allRows) {
-        const val = row.data[statusCol.id] ?? '';
-        const opt = statusCol.options?.find(o => o.id === val);
+        const val = row.data?.[sc.id] ?? '';
+        const opt = sc.options?.find(o => o.id === val);
         if (opt && LA_QUALIFYING_STAGES.includes(opt.label.toLowerCase())) {
-          if (row.display_id) qualifyingIds.add(row.display_id);
+          if (row.display_id) qualifyingIds.push(row.display_id);
         }
       }
 
-      // Merge with existing laRows — preserve local data, add missing, remove nothing
+      setSyncStatus(`Found ${qualifyingIds.length} qualifying leads`);
+
+      if (qualifyingIds.length === 0) {
+        setSyncStatus('No Contacted/Interviewed/Hired leads found');
+        return;
+      }
+
+      // Step 4: Merge with existing — preserve all local data
       setLaRows(prev => {
         const existingMap: Record<string, LARow> = {};
         for (const r of prev) existingMap[r.uniqueId] = r;
 
-        const synced: LARow[] = Array.from(qualifyingIds).map(id =>
+        const merged: LARow[] = qualifyingIds.map(id =>
           existingMap[id] ?? {
             uniqueId: id,
             localData: {},
@@ -85,39 +118,41 @@ export function useLeadAnalysis(
           }
         );
 
-        return synced.sort((a, b) => {
+        return merged.sort((a, b) => {
           const na = parseInt(a.uniqueId.replace('UP', ''), 10);
           const nb = parseInt(b.uniqueId.replace('UP', ''), 10);
           return nb - na;
         });
       });
+
+      setTimeout(() => setSyncStatus(''), 3000);
     } catch (e) {
-      console.warn('Lead Analysis sync failed, falling back to prop data', e);
-      // Fallback: use proposalRows prop
+      console.error('Sync error:', e);
+      setSyncStatus('Sync failed — using local data');
       syncFromProps();
     } finally {
       setLoading(false);
     }
-  }, [statusCol, proposalColumns]);
+  }, []); // no dependencies — fully self-contained
 
-  // ── Fallback sync from props (for local HTML file / offline) ────────────────
+  // ── Fallback: sync from props (works without Supabase) ──────────────────────
   const syncFromProps = useCallback(() => {
-    if (!statusCol) return;
-    const qualifyingIds = new Set<string>();
+    if (!statusCol || proposalRows.length === 0) return;
+    const qualifyingIds: string[] = [];
     for (const row of proposalRows) {
       const val = row.data[statusCol.id] ?? '';
       const opt = statusCol.options?.find(o => o.id === val);
       if (opt && LA_QUALIFYING_STAGES.includes(opt.label.toLowerCase())) {
-        if (row.display_id) qualifyingIds.add(row.display_id);
+        if (row.display_id) qualifyingIds.push(row.display_id);
       }
     }
     setLaRows(prev => {
       const existingMap: Record<string, LARow> = {};
       for (const r of prev) existingMap[r.uniqueId] = r;
-      const synced: LARow[] = Array.from(qualifyingIds).map(id =>
+      const merged: LARow[] = qualifyingIds.map(id =>
         existingMap[id] ?? { uniqueId: id, localData: {}, createdAt: new Date().toISOString() }
       );
-      return synced.sort((a, b) => {
+      return merged.sort((a, b) => {
         const na = parseInt(a.uniqueId.replace('UP', ''), 10);
         const nb = parseInt(b.uniqueId.replace('UP', ''), 10);
         return nb - na;
@@ -125,28 +160,28 @@ export function useLeadAnalysis(
     });
   }, [statusCol, proposalRows]);
 
-  // ── Initial sync on mount ────────────────────────────────────────────────────
-  const hasSynced = useRef(false);
+  // ── Auto-sync on mount ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!statusCol || hasSynced.current) return;
-    hasSynced.current = true;
     syncFromSupabase();
-  }, [statusCol, syncFromSupabase]);
+  }, []); // runs once on mount
 
-  // ── Realtime: when proposal_rows changes, re-sync ────────────────────────────
+  // ── Also sync from props when they change (backup) ───────────────────────────
   useEffect(() => {
-    if (!statusCol) return;
-    const ch = supabase.channel('la_rows_watch')
+    if (proposalRows.length > 0 && statusCol) {
+      syncFromProps();
+    }
+  }, [proposalRows.length, statusCol]); // eslint-disable-line
+
+  // ── Realtime: re-sync when proposal_rows changes ─────────────────────────────
+  useEffect(() => {
+    const ch = supabase.channel('la_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
-        () => {
-          // Debounce — wait 1s then resync
-          setTimeout(() => syncFromSupabase(), 1000);
-        }
+        () => { setTimeout(() => syncFromSupabase(), 1500); }
       ).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [statusCol, syncFromSupabase]);
+  }, [syncFromSupabase]);
 
-  // ── Build option label map for display ───────────────────────────────────────
+  // ── Option label map for display ─────────────────────────────────────────────
   const optionLabelMap = useMemo(() => {
     const map: Record<string, Record<string, string>> = {};
     for (const col of proposalColumns) {
@@ -208,8 +243,8 @@ export function useLeadAnalysis(
     }));
   }, []);
 
-  const renameColumn       = useCallback((colId: string, name: string)            => { setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, name } : c)); }, []);
-  const resizeColumn       = useCallback((colId: string, width: number)            => { setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, width: Math.max(80, width) } : c)); }, []);
+  const renameColumn        = useCallback((colId: string, name: string)             => { setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, name } : c)); }, []);
+  const resizeColumn        = useCallback((colId: string, width: number)             => { setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, width: Math.max(80, width) } : c)); }, []);
   const updateColumnOptions = useCallback((colId: string, options: LAColumn['options']) => { setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, options } : c)); }, []);
 
   const reorderColumns = useCallback((sourceId: string, targetId: string, position: 'before' | 'after') => {
@@ -235,6 +270,7 @@ export function useLeadAnalysis(
     mergedRows,
     laRows,
     loading,
+    syncStatus,
     statusCol,
     proposalColumns,
     forceResync: syncFromSupabase,

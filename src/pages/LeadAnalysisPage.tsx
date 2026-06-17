@@ -14,7 +14,7 @@ export const LeadAnalysisPage: React.FC = () => {
     laColumns, mergedRows, statusCol,
     addLinkedColumn, addLocalColumn,
     deleteColumn, renameColumn, resizeColumn, reorderColumns, updateColumnOptions,
-    updateCell, forceResync,
+    updateCell, forceResync, syncStatus, loading,
   } = useLeadAnalysis(proposalColumns, proposalRows);
 
   const [showAddCol, setShowAddCol] = useState(false);
@@ -120,6 +120,14 @@ export const LeadAnalysisPage: React.FC = () => {
               Add columns below to enrich these leads. Click <strong>Resync</strong> if counts don't match Proposal Details.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Sync status indicator */}
+      {(loading || syncStatus) && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+          {loading && <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />}
+          <p className="text-xs text-blue-700 font-medium">{syncStatus || 'Syncing...'}</p>
         </div>
       )}
 
