@@ -148,12 +148,14 @@ export function useProposalTable() {
     const toAdd: Row[] = newRows.map(r => ({ ...r, id: uid('row'), created_at: new Date().toISOString() }));
 
     if (mode === 'overwrite') {
-      // Delete all existing from Supabase first
+      // Delete ALL existing rows from Supabase in batches
       let safe = 0;
-      while (safe < 20) {
+      while (safe < 50) {
         const { data } = await supabase.from('proposal_rows').select('id').limit(500);
         if (!data || data.length === 0) break;
-        await supabase.from('proposal_rows').delete().in('id', (data as {id:string}[]).map(r => r.id));
+        const ids = (data as {id:string}[]).map(r => r.id);
+        const { error } = await supabase.from('proposal_rows').delete().in('id', ids);
+        if (error) { console.error('Delete error:', error); break; }
         safe++;
       }
       rowsRef.current = toAdd;
@@ -163,11 +165,19 @@ export function useProposalTable() {
       setRows(prev => [...prev, ...toAdd]);
     }
 
-    // Insert in chunks of 500
-    const CHUNK = 500;
+    // Insert ALL new rows in chunks of 200 (smaller = more reliable)
+    const CHUNK = 200;
+    let inserted = 0;
     for (let i = 0; i < toAdd.length; i += CHUNK) {
-      await supabase.from('proposal_rows').insert(toAdd.slice(i, i + CHUNK));
+      const chunk = toAdd.slice(i, i + CHUNK);
+      const { error } = await supabase.from('proposal_rows').insert(chunk);
+      if (error) {
+        console.error(`Insert error at chunk ${i}:`, error.message);
+        throw new Error(`Failed to save rows to Supabase: ${error.message}`);
+      }
+      inserted += chunk.length;
     }
+    console.log(`✓ Successfully imported ${inserted} rows to Supabase`);
   }, []);
 
   const clearAllRows = useCallback(async () => {

@@ -13,13 +13,15 @@ const ROWS_PER_PAGE = 100;
 export const ProposalsPage: React.FC = () => {
   const [showAddCol,  setShowAddCol]  = useState(false);
   const [showImport,  setShowImport]  = useState(false);
+  const [importing,   setImporting]   = useState(false);
+  const [importMsg,   setImportMsg]   = useState('');
   const [search,      setSearch]      = useState('');
   const [page,        setPage]        = useState(1);
   const [funnelFilter, setFunnelFilter] = useState<string | null>(null);
 
   const {
     columns, rows, loading, error,
-    addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
+    addRow, duplicateRow, deleteRow, updateCell, importRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   } = useProposals();
@@ -126,7 +128,7 @@ export const ProposalsPage: React.FC = () => {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" style={{ borderWidth: 3 }} />
+      <div className="w-8 h-8 border-blue-500 border-t-transparent rounded-full animate-spin" style={{ borderWidth: 3, borderStyle: 'solid' }} />
       <div className="text-center">
         <p className="text-sm font-semibold text-slate-700">Loading data from Supabase...</p>
         <p className="text-xs text-slate-400 mt-1">This may take a moment for large datasets</p>
@@ -136,7 +138,9 @@ export const ProposalsPage: React.FC = () => {
 
   if (error) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <p className="text-sm text-slate-600 font-medium">Failed to load data</p>
+      <p className="text-sm text-red-600 font-semibold">Supabase Error</p>
+      <p className="text-xs text-slate-500 max-w-md text-center">{error}</p>
+      <p className="text-xs text-slate-400 max-w-md text-center">This usually means RLS is blocking reads. Go to Supabase → SQL Editor and run:<br/><code className="bg-slate-100 px-2 py-1 rounded">ALTER TABLE proposal_rows DISABLE ROW LEVEL SECURITY;</code></p>
       <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-xl">Retry</button>
     </div>
   );
@@ -199,6 +203,20 @@ export const ProposalsPage: React.FC = () => {
         onFilterByStatus={optId => { setFunnelFilter(optId); setPage(1); }}
         activeFilter={funnelFilter}
       />
+
+      {/* Import progress banner */}
+      {importing && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium ${
+          importMsg.startsWith('✓') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+          importMsg.startsWith('✗') ? 'bg-red-50 border-red-200 text-red-700' :
+          'bg-blue-50 border-blue-200 text-blue-700'
+        }`}>
+          {!importMsg.startsWith('✓') && !importMsg.startsWith('✗') && (
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          )}
+          {importMsg}
+        </div>
+      )}
 
       {/* Stats + pagination info */}
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
@@ -303,12 +321,17 @@ export const ProposalsPage: React.FC = () => {
           columns={columns}
           existingRows={rows}
           onImport={async (newRows, mode) => {
-            if (mode === 'overwrite') {
-              // Clear everything first, then import fresh
-              await clearAllRows();
-              localStorage.removeItem('trackhub_la_rows_v1');
+            setShowImport(false);
+            setImporting(true);
+            setImportMsg(`Saving ${newRows.length} rows to Supabase...`);
+            try {
+              await importRows(newRows as Omit<Row, 'id' | 'created_at'>[], mode);
+              setImportMsg(`✓ ${newRows.length} rows saved successfully`);
+              setTimeout(() => { setImporting(false); setImportMsg(''); }, 3000);
+            } catch (e: any) {
+              setImportMsg(`✗ Error: ${e?.message ?? 'Import failed'}`);
+              setTimeout(() => { setImporting(false); setImportMsg(''); }, 5000);
             }
-            importRows(newRows as Omit<Row, 'id' | 'created_at'>[], mode);
           }}
           onClose={() => setShowImport(false)}
         />

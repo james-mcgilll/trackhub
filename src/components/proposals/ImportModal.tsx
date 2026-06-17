@@ -60,6 +60,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
   const [error, setError]             = useState<string | null>(null);
   const [dragOver, setDragOver]       = useState(false);
   const [duplicateMode, setDuplicateMode] = useState<'skip' | 'overwrite'>('skip');
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Auto-map CSV headers to columns by name match
@@ -402,11 +403,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
 
           {step === 'preview' && (
             <button
-              onClick={handleImport}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors"
+              onClick={async () => {
+                setImporting(true);
+                handleImport();
+              }}
+              disabled={importing}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-wait transition-colors"
             >
               <Upload size={15} />
-              Import {csvRows.length} Rows
+              {importing ? 'Importing...' : `Import ${csvRows.length} Rows`}
             </button>
           )}
         </div>
