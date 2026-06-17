@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink } from 'lucide-react';
 import type { Column } from '../../types/proposals';
-import { OPTION_COLOR_STYLES } from '../../types/proposals';
+import { OPTION_COLOR_STYLES, getFunnelStatusStyle } from '../../types/proposals';
 
 interface CellProps {
   column: Column;
@@ -140,7 +140,7 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
           className="w-full h-full flex items-center px-2.5 hover:bg-slate-50 focus:outline-none focus:bg-blue-50 transition-colors"
         >
           {selected
-            ? <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${badgeStyle}`}>{selected.label}</span>
+            ? <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${getFunnelStatusStyle(selected.label).full || badgeStyle}`}>{selected.label}</span>
             : <span className="text-slate-300 text-xs">Click to select</span>
           }
         </button>

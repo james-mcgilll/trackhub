@@ -110,6 +110,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
   const onDragEnd = () => { dragIdRef.current = null; setDragId(null); setDropTarget(null); };
 
   // ── Delete row confirm ───────────────────────────────────────────────────
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [pendingDel, setPendingDel] = useState<string | null>(null);
   const delTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleDelRow = (rowId: string) => {
@@ -204,7 +205,14 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                 No rows yet — click <strong className="text-slate-600">Add Row</strong> to get started.
               </td></tr>
             ) : rows.map((row, ri) => (
-              <tr key={row.id} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/20 transition-colors group/row" style={{ height: ROW_H }}>
+              <tr key={row.id}
+                onClick={() => setSelectedRow(row.id === selectedRow ? null : row.id)}
+                className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
+                  selectedRow === row.id
+                    ? 'bg-blue-50 border-l-2 border-l-blue-400'
+                    : 'hover:bg-blue-50/30'
+                }`}
+                style={{ height: ROW_H }}>
                 <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>
                   <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all" title={row.id}>
                     {row.display_id || `UP${String(ri + 1).padStart(3, '0')}`}

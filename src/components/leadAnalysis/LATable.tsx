@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, memo } from 'react';
 import { GripVertical, Link2 } from 'lucide-react';
+import { getFunnelStatusStyle } from '../../types/proposals';
 import type { LAColumn } from '../../types/leadAnalysis';
 import { OPTION_COLOR_STYLES } from '../../types/proposals';
 import { LAColumnContextMenu } from './LAColumnContextMenu';
@@ -136,6 +137,7 @@ export const LATable: React.FC<LATableProps> = ({
   onReorderColumns, onUpdateColumnOptions,
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
 
   // ── Column resize ─────────────────────────────────────────────────────────
   const resizeRef = useRef<{ id: string; startX: number; startW: number } | null>(null);
@@ -255,7 +257,12 @@ export const LATable: React.FC<LATableProps> = ({
               </tr>
             ) : rows.map(row => (
               <tr key={row.uniqueId}
-                className="border-b border-slate-100 last:border-0 hover:bg-blue-50/20 transition-colors group/row"
+                onClick={() => setSelectedRow(row.uniqueId === selectedRow ? null : row.uniqueId)}
+                className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
+                  selectedRow === row.uniqueId
+                    ? 'bg-blue-50 border-l-2 border-l-blue-400'
+                    : 'hover:bg-blue-50/30'
+                }`}
                 style={{ height: ROW_H }}>
 
                 {/* Unique ID */}
@@ -268,11 +275,9 @@ export const LATable: React.FC<LATableProps> = ({
                 {/* Current status badge */}
                 <td className="border-r border-slate-100 px-2.5" style={{ width: ST_W }}>
                   {row.currentStatus ? (
-                    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                      row.currentStatus.toLowerCase() === 'hired'       ? 'bg-emerald-100 text-emerald-700' :
-                      row.currentStatus.toLowerCase() === 'interviewed' ? 'bg-cyan-100 text-cyan-700' :
-                                                                           'bg-violet-100 text-violet-700'
-                    }`}>{row.currentStatus}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${getFunnelStatusStyle(row.currentStatus).full}`}>
+                      {row.currentStatus}
+                    </span>
                   ) : (
                     <span className="text-slate-300 text-xs">—</span>
                   )}
