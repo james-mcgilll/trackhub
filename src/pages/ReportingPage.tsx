@@ -169,16 +169,20 @@ export const ReportingPage: React.FC = () => {
     });
   }, [filteredRows, dates, dateCol, statusCol, series, resolveLabel]);
 
-  // ── Summary counts (cumulative funnel) ────────────────────────────────────────
+  // ── Summary counts — only rows within the selected date range ───────────────
   const exactCounts = useMemo(() => {
     const c: Record<string, number> = {};
+    if (!dateCol || dates.length === 0) return c;
+    const dateSet = new Set(dates);
     for (const row of filteredRows) {
+      const dateVal = normalizeDate(row.data[dateCol.id] ?? '');
+      if (!dateSet.has(dateVal)) continue; // only count rows in range
       const raw = row.data[statusCol?.id ?? ''] ?? '';
       const label = resolveLabel(statusCol?.id ?? '', raw);
       if (label) c[label] = (c[label] ?? 0) + 1;
     }
     return c;
-  }, [filteredRows, statusCol, resolveLabel]);
+  }, [filteredRows, statusCol, dateCol, dates, resolveLabel]);
 
   const cumulativeCounts = useMemo(() => {
     const c: Record<string, number> = {};
