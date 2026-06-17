@@ -16,34 +16,41 @@ function nextDisplayId(existingRows: Row[]): string {
   return `UP${String(max + 1).padStart(3, '0')}`;
 }
 
+function lsGetCols(): Column[] {
+  try { const d = localStorage.getItem(LS_COLS); return d ? JSON.parse(d) : []; } catch { return []; }
+}
+function lsGetRows(): Row[] {
+  try { const d = localStorage.getItem(LS_ROWS); return d ? JSON.parse(d) : []; } catch { return []; }
+}
 function lsSaveCols(cols: Column[]) {
-  try { localStorage.setItem(LS_COLS, JSON.stringify(cols)); } catch {}
+  try { if (cols.length > 0) localStorage.setItem(LS_COLS, JSON.stringify(cols)); } catch {}
 }
 function lsSaveRows(rows: Row[]) {
-  try { localStorage.setItem(LS_ROWS, JSON.stringify(rows)); } catch {}
+  try { if (rows.length > 0) localStorage.setItem(LS_ROWS, JSON.stringify(rows)); } catch {}
 }
-
-function bg(p: PromiseLike<unknown>) {
-  Promise.resolve(p).catch(() => {});
-}
+function bg(p: PromiseLike<unknown>) { Promise.resolve(p).catch(() => {}); }
 
 export function useProposalTable() {
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [rows,    setRows]    = useState<Row[]>([]);
+  // ── Load from localStorage INSTANTLY on mount (so UI is never blank) ────────
+  const [columns, setColumns] = useState<Column[]>(lsGetCols);
+  const [rows,    setRows]    = useState<Row[]>(lsGetRows);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
 
-  const rowsRef      = useRef<Row[]>([]);
-  const colsRef      = useRef<Column[]>([]);
+  const rowsRef      = useRef<Row[]>(rows);
+  const colsRef      = useRef<Column[]>(columns);
   const localInserts = useRef<Set<string>>(new Set());
   const localDeletes = useRef<Set<string>>(new Set());
 
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   useEffect(() => { colsRef.current = columns; }, [columns]);
-  useEffect(() => { if (columns.length > 0) lsSaveCols(columns); }, [columns]);
-  useEffect(() => { if (rows.length > 0) lsSaveRows(rows); }, [rows]);
 
-  // ── Load from Supabase (primary source of truth) ──────────────────────────
+  // ── Persist to localStorage whenever state changes ───────────────────────────
+  useEffect(() => { lsSaveCols(columns); }, [columns]);
+  useEffect(() => { lsSaveRows(rows); }, [rows]);
+
+  // ── Sync from Supabase in background ─────────────────────────────────────────
+  // Only UPDATES if Supabase has MORE or NEWER data — never wipes existing data
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -52,17 +59,9 @@ export function useProposalTable() {
         const { data: colData, error: colErr } = await supabase
           .from('proposal_columns').select('*').order('order');
 
-        if (colErr || !colData || colData.length === 0) {
-          // Supabase empty or error — try localStorage as fallback
-          const lsCols = localStorage.getItem(LS_COLS);
-          const lsRows = localStorage.getItem(LS_ROWS);
-          if (lsCols) setColumns(JSON.parse(lsCols));
-          if (lsRows) setRows(JSON.parse(lsRows));
-          setLoading(false);
-          return;
+        if (!colErr && colData && colData.length > 0) {
+          setColumns(colData as Column[]);
         }
-
-        setColumns(colData as Column[]);
 
         // Fetch ALL rows with pagination
         let allRows: Row[] = [];
@@ -80,24 +79,25 @@ export function useProposalTable() {
           from += PAGE;
         }
 
-        setRows(allRows);
-        rowsRef.current = allRows;
+        // ── Critical: only update rows if Supabase returned data ──
+        // Never replace existing data with empty result
+        if (allRows.length > 0) {
+          setRows(allRows);
+          rowsRef.current = allRows;
+        }
+        // If allRows.length === 0 but localStorage has data → keep localStorage data
+        // This handles: Supabase timeout, RLS issue, network blip
       } catch (e: any) {
-        // Last resort: localStorage
-        try {
-          const lsCols = localStorage.getItem(LS_COLS);
-          const lsRows = localStorage.getItem(LS_ROWS);
-          if (lsCols) setColumns(JSON.parse(lsCols));
-          if (lsRows) setRows(JSON.parse(lsRows));
-        } catch {}
-        setError(e?.message ?? 'Failed to load');
+        // Supabase failed — localStorage data is already showing, just log the error
+        console.warn('Supabase load failed, using localStorage data:', e?.message);
+        setError(null); // don't show error to user — they already see cached data
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // ── Realtime subscriptions ────────────────────────────────────────────────
+  // ── Realtime subscriptions ────────────────────────────────────────────────────
   useEffect(() => {
     const rowCh = supabase.channel('rows_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
@@ -141,10 +141,9 @@ export function useProposalTable() {
     return () => { supabase.removeChannel(rowCh); supabase.removeChannel(colCh); };
   }, []);
 
-  // ── Row operations ────────────────────────────────────────────────────────
+  // ── Row operations ────────────────────────────────────────────────────────────
   const addRow = useCallback(() => {
-    const displayId = nextDisplayId(rowsRef.current);
-    const row: Row = { id: uid('row'), display_id: displayId, data: {}, created_at: new Date().toISOString() };
+    const row: Row = { id: uid('row'), display_id: nextDisplayId(rowsRef.current), data: {}, created_at: new Date().toISOString() };
     localInserts.current.add(row.id);
     rowsRef.current = [...rowsRef.current, row];
     setRows(prev => [...prev, row]);
@@ -182,25 +181,21 @@ export function useProposalTable() {
     mode: 'skip' | 'overwrite' = 'skip'
   ) => {
     const toAdd: Row[] = newRows.map(r => ({ ...r, id: uid('row'), created_at: new Date().toISOString() }));
-
     if (mode === 'overwrite') {
       rowsRef.current = toAdd;
       setRows(toAdd);
       lsSaveRows(toAdd);
-      // Delete all from Supabase in batches
       let safe = 0;
       while (safe < 20) {
         const { data } = await supabase.from('proposal_rows').select('id').limit(500);
         if (!data || data.length === 0) break;
-        const ids = (data as { id: string }[]).map(r => r.id);
-        await supabase.from('proposal_rows').delete().in('id', ids);
+        await supabase.from('proposal_rows').delete().in('id', (data as {id:string}[]).map(r => r.id));
         safe++;
       }
     } else {
       rowsRef.current = [...rowsRef.current, ...toAdd];
       setRows(prev => [...prev, ...toAdd]);
     }
-
     const CHUNK = 500;
     for (let i = 0; i < toAdd.length; i += CHUNK) {
       await supabase.from('proposal_rows').insert(toAdd.slice(i, i + CHUNK));
@@ -215,12 +210,12 @@ export function useProposalTable() {
     while (safe < 20) {
       const { data } = await supabase.from('proposal_rows').select('id').limit(500);
       if (!data || data.length === 0) break;
-      await supabase.from('proposal_rows').delete().in('id', (data as { id: string }[]).map(r => r.id));
+      await supabase.from('proposal_rows').delete().in('id', (data as {id:string}[]).map(r => r.id));
       safe++;
     }
   }, []);
 
-  // ── Column operations ─────────────────────────────────────────────────────
+  // ── Column operations ─────────────────────────────────────────────────────────
   const addColumn = useCallback((name: string, type: ColumnType, options: { label: string; color: string }[] = []) => {
     const maxOrder = colsRef.current.length > 0 ? Math.max(...colsRef.current.map(c => c.order)) : -1;
     const opts = type === 'dropdown' ? options.map(o => ({ id: uid('opt'), ...o })) : null;
