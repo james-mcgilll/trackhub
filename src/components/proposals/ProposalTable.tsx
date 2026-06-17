@@ -128,13 +128,13 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
 
   return (
     <>
-      <div ref={tableRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white"
+      <div ref={tableRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white w-full"
         style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        <table className="border-collapse table-fixed" style={{ minWidth: '100%' }}>
+        <table className="border-collapse w-full" style={{ tableLayout: 'fixed', minWidth: columns.reduce((sum, col) => sum + col.width, ID_W + ACT_W) }}>
           <colgroup>
-            <col style={{ width: ID_W }} />
-            {columns.map(c => <col key={c.id} style={{ width: c.width }} />)}
-            <col style={{ width: ACT_W }} />
+            <col style={{ width: ID_W, minWidth: ID_W }} />
+            {columns.map(c => <col key={c.id} style={{ width: c.width, minWidth: c.width }} />)}
+            <col style={{ width: ACT_W, minWidth: ACT_W }} />
           </colgroup>
 
           <thead>

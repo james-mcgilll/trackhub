@@ -93,7 +93,7 @@ export const ProposalsPage: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col gap-5 max-w-screen-2xl">
+    <div className="flex flex-col gap-5 w-full">
       <PageHeader
         title="Proposal Details"
         subtitle="Manage proposal records in a flexible table view."
