@@ -82,7 +82,20 @@ export function useLeadAnalysis(
   }, [qualifiedUniqueIds]);
 
   // ── Build merged view rows ───────────────────────────────────────────────────
-  // For each LA row, merge proposal data (for linked cols) + local data
+  // Build a lookup: proposalColId -> { optionId -> label }
+  const optionLabelMap = useMemo(() => {
+    const map: Record<string, Record<string, string>> = {};
+    for (const col of proposalColumns) {
+      if (col.type === 'dropdown' && col.options) {
+        map[col.id] = {};
+        for (const opt of col.options) {
+          map[col.id][opt.id] = opt.label;
+        }
+      }
+    }
+    return map;
+  }, [proposalColumns]);
+
   const proposalRowByUniqueId = useMemo(() => {
     const map: Record<string, Row> = {};
     for (const row of proposalRows) {
@@ -91,7 +104,7 @@ export function useLeadAnalysis(
     return map;
   }, [proposalRows]);
 
-  // Merged view: each item has uniqueId + all column values resolved
+  // Merged view: each item has uniqueId + all column values resolved to human labels
   const mergedRows = useMemo(() => {
     return laRows.map(laRow => {
       const proposalRow = proposalRowByUniqueId[laRow.uniqueId];
@@ -99,20 +112,25 @@ export function useLeadAnalysis(
 
       for (const col of laColumns) {
         if (col.source === 'linked' && col.linkedColId && proposalRow) {
-          merged[col.id] = proposalRow.data[col.linkedColId] ?? '';
+          const rawValue = proposalRow.data[col.linkedColId] ?? '';
+          // If the linked proposal column is a dropdown, resolve ID -> label
+          const labelMap = optionLabelMap[col.linkedColId];
+          merged[col.id] = labelMap
+            ? (labelMap[rawValue] ?? rawValue)  // show label, fallback to raw if no match
+            : rawValue;
         } else if (col.source === 'local') {
           merged[col.id] = laRow.localData[col.id] ?? '';
         }
       }
 
-      // Current status from proposal (for display badge)
+      // Current status from proposal (resolve option ID -> label)
       const currentStatus = proposalRow && statusCol
         ? (statusCol.options?.find(o => o.id === proposalRow.data[statusCol.id])?.label ?? '')
         : '';
 
       return { uniqueId: laRow.uniqueId, data: merged, currentStatus };
     });
-  }, [laRows, laColumns, proposalRowByUniqueId, statusCol]);
+  }, [laRows, laColumns, proposalRowByUniqueId, statusCol, optionLabelMap]);
 
   // ── Column operations ─────────────────────────────────────────────────────────
 
