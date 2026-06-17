@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Columns, Search, Download, Info } from 'lucide-react';
+import { Columns, Search, Download, Info, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
@@ -14,10 +14,11 @@ export const LeadAnalysisPage: React.FC = () => {
     laColumns, mergedRows, statusCol,
     addLinkedColumn, addLocalColumn,
     deleteColumn, renameColumn, resizeColumn, reorderColumns, updateColumnOptions,
-    updateCell,
+    updateCell, forceResync,
   } = useLeadAnalysis(proposalColumns, proposalRows);
 
   const [showAddCol, setShowAddCol] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const [search,     setSearch]     = useState('');
   const [page,       setPage]       = useState(1);
 
@@ -73,6 +74,16 @@ export const LeadAnalysisPage: React.FC = () => {
               <input type="text" value={search} onChange={e => handleSearch(e.target.value)}
                 placeholder="Search..." className="text-sm text-slate-600 placeholder-slate-400 outline-none bg-transparent w-32" />
             </div>
+            {/* Resync */}
+            <button
+              onClick={() => { setResyncing(true); forceResync(); setTimeout(() => setResyncing(false), 1000); }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+              title="Resync all leads from Proposal Details"
+            >
+              <RefreshCw size={14} className={resyncing ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">{resyncing ? 'Syncing...' : 'Resync'}</span>
+            </button>
             {/* Export */}
             <button onClick={handleExport}
               className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
@@ -106,7 +117,7 @@ export const LeadAnalysisPage: React.FC = () => {
             <p className="text-xs font-semibold text-blue-700">Auto-populated from Proposal Details</p>
             <p className="text-xs text-blue-600 mt-0.5">
               Linked to <strong>"{statusCol.name}"</strong> column. Leads marked as Contacted, Interviewed, or Hired appear here automatically.
-              Add columns below to enrich these leads with extra details.
+              Add columns below to enrich these leads. Click <strong>Resync</strong> if counts don't match Proposal Details.
             </p>
           </div>
         </div>

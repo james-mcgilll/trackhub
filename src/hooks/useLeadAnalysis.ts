@@ -213,12 +213,32 @@ export function useLeadAnalysis(
     ));
   }, []);
 
+  // Force resync — rebuilds laRows from ALL current qualifiedUniqueIds
+  // Preserves all existing localData, just adds any missing rows
+  const forceResync = useCallback(() => {
+    setLaRows(prev => {
+      const existingMap: Record<string, LARow> = {};
+      for (const row of prev) existingMap[row.uniqueId] = row;
+
+      const allIds = Array.from(qualifiedUniqueIds);
+      const synced = allIds.map(id => 
+        existingMap[id] ?? { uniqueId: id, localData: {}, createdAt: new Date().toISOString() }
+      );
+
+      return synced.sort((a, b) => {
+        const na = parseInt(a.uniqueId.replace('UP', ''), 10);
+        const nb = parseInt(b.uniqueId.replace('UP', ''), 10);
+        return nb - na;
+      });
+    });
+  }, [qualifiedUniqueIds]);
+
   return {
     laColumns: [...laColumns].sort((a, b) => a.order - b.order),
     mergedRows,
     laRows,
     qualifiedUniqueIds,
-    statusCol,          // exposed so page can show which column is being used
+    statusCol,
     proposalColumns,
     addLinkedColumn,
     addLocalColumn,
@@ -228,5 +248,6 @@ export function useLeadAnalysis(
     reorderColumns,
     updateColumnOptions,
     updateCell,
+    forceResync,
   };
 }
