@@ -1,18 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import type { LAColumn, LARow } from '../types/leadAnalysis';
-import { LA_COLUMNS_KEY, LA_ROWS_KEY, LA_QUALIFYING_STAGES } from '../types/leadAnalysis';
+import { LA_QUALIFYING_STAGES } from '../types/leadAnalysis';
 import type { Column, Row } from '../types/proposals';
 
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-function lsGet<T>(key: string, fallback: T): T {
-  try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; }
-  catch { return fallback; }
-}
-function lsSet(key: string, val: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-}
+
 
 function detectStatusCol(cols: Column[]): Column | null {
   const byName = cols.find(c =>
@@ -30,13 +24,11 @@ export function useLeadAnalysis(
   proposalColumns: Column[],
   proposalRows: Row[],
 ) {
-  const [laColumns, setLaColumns] = useState<LAColumn[]>(() => lsGet(LA_COLUMNS_KEY, []));
-  const [laRows,    setLaRows]    = useState<LARow[]>(()    => lsGet(LA_ROWS_KEY,    []));
+  const [laColumns, setLaColumns] = useState<LAColumn[]>([]);
+  const [laRows,    setLaRows]    = useState<LARow[]>([]);
   const [loading,   setLoading]   = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
 
-  useEffect(() => { lsSet(LA_COLUMNS_KEY, laColumns); }, [laColumns]);
-  useEffect(() => { lsSet(LA_ROWS_KEY,    laRows);    }, [laRows]);
 
   const statusCol = useMemo(() => detectStatusCol(proposalColumns), [proposalColumns]);
 
