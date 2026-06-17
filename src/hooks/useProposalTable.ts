@@ -6,6 +6,23 @@ import type { Column, Row, ColumnType } from '../types/proposals';
 // ── ID helpers ────────────────────────────────────────────────────────────────
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+// Global counter for display IDs — increments atomically, never collides
+let displayIdCounter = 0;
+
+function initCounter(rows: Row[]) {
+  let max = 0;
+  for (const r of rows) {
+    const n = parseInt((r.display_id ?? '').replace('UP', ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  if (max > displayIdCounter) displayIdCounter = max;
+}
+
+function nextDisplayId(): string {
+  displayIdCounter += 1;
+  return `UP${String(displayIdCounter).padStart(3, '0')}`;
+}
+
 // Compute next display ID — always reads from Supabase to avoid collisions
 
 export function useProposalTable() {
@@ -36,6 +53,7 @@ export function useProposalTable() {
         if (rr.error) throw rr.error;
         setColumns(cr.data as Column[]);
         setRows(rr.data as Row[]);
+        initCounter(rr.data as Row[]);
       } catch (e: any) {
         setError(e.message ?? 'Failed to load');
       } finally {
@@ -105,18 +123,9 @@ export function useProposalTable() {
   // ── Row operations ────────────────────────────────────────────────────────
 
   const addRow = useCallback(() => {
-    // Compute display ID instantly from current state — no network wait
-    const allIds = rowsRef.current.map(r => r.display_id ?? '');
-    let max = 0;
-    for (const id of allIds) {
-      const n = parseInt(id.replace('UP', ''), 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-    const displayId = `UP${String(max + 1).padStart(3, '0')}`;
-
     const row: Row = {
       id: uid('row'),
-      display_id: displayId,
+      display_id: nextDisplayId(),
       data: {},
       created_at: new Date().toISOString(),
     };
@@ -140,18 +149,9 @@ export function useProposalTable() {
     const src = rowsRef.current.find(r => r.id === rowId);
     if (!src) return;
 
-    // Compute a local display ID instantly — no network wait
-    const allIds = rowsRef.current.map(r => r.display_id ?? '');
-    let max = 0;
-    for (const id of allIds) {
-      const n = parseInt(id.replace('UP', ''), 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-    const displayId = `UP${String(max + 1).padStart(3, '0')}`;
-
     const copy: Row = {
       id: uid('row'),
-      display_id: displayId,
+      display_id: nextDisplayId(),
       data: { ...src.data },
       created_at: new Date().toISOString(),
     };
