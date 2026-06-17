@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../utils/supabase';
 import type { Column, Row } from '../types/proposals';
 
-// Fetch ALL rows + columns directly from Supabase with pagination
+const LS_COLS = 'trackhub_proposal_columns_v2';
+const LS_ROWS = 'trackhub_proposal_rows_v2';
+
 export function useReportingData() {
   const [columns, setColumns] = useState<Column[]>([]);
   const [rows,    setRows]    = useState<Row[]>([]);
@@ -12,12 +14,22 @@ export function useReportingData() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch columns
-      const { data: colData } = await supabase
-        .from('proposal_columns').select('*').order('order');
-      if (colData) setColumns(colData as Column[]);
+      // ── Step 1: Load from localStorage immediately so chart shows fast ──
+      try {
+        const lsCols = localStorage.getItem(LS_COLS);
+        const lsRows = localStorage.getItem(LS_ROWS);
+        if (lsCols) setColumns(JSON.parse(lsCols));
+        if (lsRows) setRows(JSON.parse(lsRows));
+      } catch {}
 
-      // Fetch ALL rows with pagination
+      // ── Step 2: Fetch columns from Supabase ──
+      const { data: colData, error: colErr } = await supabase
+        .from('proposal_columns').select('*').order('order');
+      if (!colErr && colData && colData.length > 0) {
+        setColumns(colData as Column[]);
+      }
+
+      // ── Step 3: Fetch ALL rows from Supabase with pagination ──
       let allRows: Row[] = [];
       const PAGE = 1000;
       let from = 0;
@@ -31,17 +43,13 @@ export function useReportingData() {
         if (data.length < PAGE) break;
         from += PAGE;
       }
-      setRows(allRows);
-      setLastSync(new Date().toLocaleTimeString());
+
+      if (allRows.length > 0) {
+        setRows(allRows);
+        setLastSync(new Date().toLocaleTimeString());
+      }
     } catch (e) {
-      console.warn('Reporting fetch failed, using localStorage fallback');
-      // Fallback to localStorage
-      try {
-        const lsCols = localStorage.getItem('trackhub_proposal_columns_v2');
-        const lsRows = localStorage.getItem('trackhub_proposal_rows_v2');
-        if (lsCols) setColumns(JSON.parse(lsCols));
-        if (lsRows) setRows(JSON.parse(lsRows));
-      } catch {}
+      console.warn('Reporting Supabase fetch failed, using localStorage');
     } finally {
       setLoading(false);
     }
@@ -49,7 +57,7 @@ export function useReportingData() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Realtime refresh
+  // Realtime refresh when rows change
   useEffect(() => {
     const ch = supabase.channel('reporting_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },

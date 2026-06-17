@@ -34,7 +34,7 @@ export const ReportingPage: React.FC = () => {
   const { notes, getNote, setNote, deleteNote } = useDayNotes();
 
   // ── Date range ──────────────────────────────────────────────────────────────
-  const [preset,       setPreset]       = useState<RangePreset>('last30');
+  const [preset,       setPreset]       = useState<RangePreset>('last90');
   const [custom,       setCustom]       = useState<DateRange>({ from: '', to: '' });
   const [skipWeekends, setSkipWeekends] = useState(false);
 
@@ -119,10 +119,25 @@ export const ReportingPage: React.FC = () => {
         })
       : rows;
 
+    // Normalize any date format to yyyy-mm-dd
+    const normalizeDate = (val: string): string => {
+      if (!val) return '';
+      // Already yyyy-mm-dd
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+      // MM/DD/YYYY or M/D/YYYY
+      const mdy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+      // DD/MM/YYYY
+      const dmy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+      return val;
+    };
+
     // Build: date -> seriesLabel -> count
     const lookup: Record<string, Record<string, number>> = {};
     for (const row of filteredRows) {
-      const dateVal = row.data[dateCol.id] ?? '';
+      const rawDate = row.data[dateCol.id] ?? '';
+      const dateVal = normalizeDate(rawDate);
       if (!dateVal || !dates.includes(dateVal)) continue;
       const rawGroupVal = row.data[groupCol.id] ?? '';
       const groupLabel  = resolveLabel(rawGroupVal, groupCol.id) || '(blank)';
