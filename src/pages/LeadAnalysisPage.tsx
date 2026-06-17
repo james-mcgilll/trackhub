@@ -3,7 +3,7 @@ import { Columns, Search, Download, Info, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
-import { useProposalTable } from '../hooks/useProposalTable';
+import { useProposals } from '../context/ProposalContext';
 import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 
 const ROWS_PER_PAGE = 100;
@@ -11,7 +11,7 @@ const ROWS_PER_PAGE = 100;
 
 
 export const LeadAnalysisPage: React.FC = () => {
-  const { columns: proposalColumns, rows: proposalRows } = useProposalTable();
+  const { columns: proposalColumns, rows: proposalRows, loading: proposalLoading } = useProposals();
   const {
     laColumns, mergedRows, statusCol,
     addLinkedColumn, addLocalColumn,
@@ -137,11 +137,13 @@ export const LeadAnalysisPage: React.FC = () => {
         </div>
       )}
 
-      {/* Sync status indicator */}
-      {(loading || syncStatus) && (
+      {/* Loading / sync status */}
+      {(proposalLoading || loading || syncStatus) && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
-          {loading && <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />}
-          <p className="text-xs text-blue-700 font-medium">{syncStatus || 'Syncing...'}</p>
+          <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <p className="text-xs text-blue-700 font-medium">
+            {proposalLoading ? 'Loading data from Proposal Details...' : syncStatus || 'Syncing leads...'}
+          </p>
         </div>
       )}
 

@@ -183,26 +183,20 @@ export function useLeadAnalysis(
     });
   }, [statusCol, proposalRows]);
 
-  // ── Auto-sync on mount ───────────────────────────────────────────────────────
-  useEffect(() => {
-    syncFromSupabase();
-  }, []); // runs once on mount
-
-  // ── Also sync from props when they change (backup) ───────────────────────────
+  // ── Sync when proposalRows loads or changes ─────────────────────────────────
+  // proposalRows comes from the shared ProposalContext (already fetched)
+  // No need to fetch independently — just react to what's in context
   useEffect(() => {
     if (proposalRows.length > 0 && statusCol) {
+      // Use syncFromProps since proposalRows are already fully loaded from context
       syncFromProps();
     }
-  }, [proposalRows.length, statusCol]); // eslint-disable-line
+  }, [proposalRows.length, statusCol?.id]); // re-run when rows load or status col changes
 
-  // ── Realtime: re-sync when proposal_rows changes ─────────────────────────────
+  // ── Also do a Supabase sync on mount as backup ────────────────────────────────
   useEffect(() => {
-    const ch = supabase.channel('la_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
-        () => { setTimeout(() => syncFromSupabase(), 1500); }
-      ).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [syncFromSupabase]);
+    syncFromSupabase();
+  }, []); // once on mount
 
   // ── Option label map for display ─────────────────────────────────────────────
   const optionLabelMap = useMemo(() => {

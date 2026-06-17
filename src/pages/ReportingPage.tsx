@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LineChart } from '../components/reporting/LineChart';
 import { DayModal } from '../components/reporting/DayModal';
-import { useReportingData } from '../hooks/useReportingData';
+import { useProposals } from '../context/ProposalContext';
 import { useDayMarkers } from '../hooks/useDayMarkers';
 import { getFunnelStatusStyle } from '../types/proposals';
 import {
@@ -32,7 +32,9 @@ const AUTO_COLORS = [
 ];
 
 export const ReportingPage: React.FC = () => {
-  const { columns, rows, loading, lastSync, refetch } = useReportingData();
+  const { columns, rows, loading } = useProposals();
+
+  const refetch = () => window.location.reload();
   const { markers, setMarker, deleteMarker } = useDayMarkers();
 
   // ── Controls ─────────────────────────────────────────────────────────────────
@@ -202,7 +204,7 @@ export const ReportingPage: React.FC = () => {
     <div className="space-y-5 w-full">
       <PageHeader
         title="Reporting"
-        subtitle={`${rows.length.toLocaleString()} rows loaded${lastSync ? ` · synced ${lastSync}` : ''}`}
+        subtitle={loading ? 'Loading from Proposal Details...' : rows.length === 0 ? 'No data — import data in Proposal Details first' : `${rows.length.toLocaleString()} rows from Proposal Details`}
         actions={
           <button onClick={refetch} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 disabled:opacity-50 transition-colors"
@@ -334,7 +336,12 @@ export const ReportingPage: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center h-48 gap-3">
             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-slate-400">Loading...</span>
+            <span className="text-sm text-slate-400">Loading data from Proposal Details...</span>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 gap-2">
+            <p className="text-sm font-semibold text-slate-500">No data available</p>
+            <p className="text-xs text-slate-400">Import data in Proposal Details first to see reports here</p>
           </div>
         ) : !dateCol || !statusCol ? (
           <div className="flex items-center justify-center h-48 text-sm text-slate-400">

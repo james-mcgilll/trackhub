@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Layout } from './components/layout/Layout';
+import { ProposalProvider } from './context/ProposalContext';
 import { DashboardPage } from './pages/DashboardPage';
-import { NotesPage } from './pages/NotesPage';
 import { ProposalsPage } from './pages/ProposalsPage';
+import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
 import { LeadPrioritizationPage } from './pages/LeadPrioritizationPage';
 import { ReportingPage } from './pages/ReportingPage';
-import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
+import { NotesPage } from './pages/NotesPage';
 import {
-  SmartAnalysisPage,
-  JobAnalysisPage, ProposalCreationPage, TransactionsPage,
+  SmartAnalysisPage, JobAnalysisPage,
+  ProposalCreationPage, TransactionsPage,
 } from './pages/PlaceholderPages';
 
 export type PageId =
@@ -36,9 +37,12 @@ function App() {
   };
 
   return (
-    <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
-      {renderPage()}
-    </Layout>
+    // ProposalProvider wraps everything — data fetched ONCE, shared with all modules
+    <ProposalProvider>
+      <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+        {renderPage()}
+      </Layout>
+    </ProposalProvider>
   );
 }
 

@@ -5,7 +5,7 @@ import { ProposalTable } from '../components/proposals/ProposalTable';
 import { AddColumnModal } from '../components/proposals/AddColumnModal';
 import { ImportModal } from '../components/proposals/ImportModal';
 import { FunnelCards } from '../components/proposals/FunnelCards';
-import { useProposalTable } from '../hooks/useProposalTable';
+import { useProposals } from '../context/ProposalContext';
 import type { ColumnType, Row } from '../types/proposals';
 
 const ROWS_PER_PAGE = 100;
@@ -22,7 +22,7 @@ export const ProposalsPage: React.FC = () => {
     addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
-  } = useProposalTable();
+  } = useProposals();
 
   const duplicateColumn = (colId: string) => {
     const src = columns.find(c => c.id === colId);
