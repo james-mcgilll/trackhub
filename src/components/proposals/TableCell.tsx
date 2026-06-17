@@ -160,21 +160,55 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
 
   // ── Date ──────────────────────────────────────────────────────────────────
   if (column.type === 'date') {
+    // Format yyyy-mm-dd -> dd/mm/yyyy for display
+    const displayDate = (v: string) => {
+      if (!v) return '';
+      const parts = v.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return v;
+    };
+
     return (
-      <input
-        data-cell={cellKey}
-        tabIndex={0}
-        type="date"
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Tab')       { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
-          if (e.key === 'Enter')     { e.preventDefault(); onNavigate(1, 0); }
-          if (e.key === 'ArrowUp')   { e.preventDefault(); onNavigate(-1, 0); }
-          if (e.key === 'ArrowDown') { e.preventDefault(); onNavigate(1, 0); }
-        }}
-        className="w-full h-full px-2.5 text-xs text-slate-700 bg-transparent outline-none hover:bg-slate-50 focus:bg-blue-50 cursor-pointer"
-      />
+      <div className="relative w-full h-full group/date">
+        {/* Display: dd/mm/yyyy */}
+        <div
+          data-cell={cellKey}
+          tabIndex={0}
+          onKeyDown={e => {
+            if (e.key === 'Tab')       { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
+            if (e.key === 'Enter' || e.key === 'F2') {
+              e.preventDefault();
+              // Trigger the hidden date input
+              (e.currentTarget.nextElementSibling as HTMLInputElement)?.showPicker?.();
+              (e.currentTarget.nextElementSibling as HTMLInputElement)?.focus();
+            }
+            if (e.key === 'ArrowUp')   { e.preventDefault(); onNavigate(-1, 0); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); onNavigate(1, 0); }
+          }}
+          onClick={() => {
+            const input = document.querySelector(`input[data-date-cell="${cellKey}"]`) as HTMLInputElement;
+            input?.showPicker?.();
+            input?.focus();
+          }}
+          className="w-full h-full flex items-center px-2.5 hover:bg-slate-50 focus:outline-none focus:bg-blue-50 cursor-pointer text-xs text-slate-700"
+        >
+          {value ? displayDate(value) : <span className="text-slate-300">dd/mm/yyyy</span>}
+        </div>
+        {/* Hidden native date input for picking */}
+        <input
+          data-date-cell={cellKey}
+          type="date"
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Tab')       { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
+            if (e.key === 'Enter')     { e.preventDefault(); onNavigate(1, 0); }
+            if (e.key === 'Escape')    { e.preventDefault(); onNavigate(0, 0); }
+          }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          style={{ zIndex: 1 }}
+        />
+      </div>
     );
   }
 

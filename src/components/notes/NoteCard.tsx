@@ -62,7 +62,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   };
 
   const formatDate = (d: Date) =>
-    new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+    new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(d);
 
   return (
     <div

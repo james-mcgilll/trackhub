@@ -63,7 +63,7 @@ export const TodoListComponent: React.FC<TodoListComponentProps> = ({
     if (diff < 0) return { text: 'Overdue', color: 'text-red-500' };
     if (diff === 0) return { text: 'Due today', color: 'text-orange-500' };
     if (diff === 1) return { text: 'Tomorrow', color: 'text-amber-500' };
-    return { text: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d), color: 'text-slate-400' };
+    return { text: new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(d), color: 'text-slate-400' };
   };
 
   return (
