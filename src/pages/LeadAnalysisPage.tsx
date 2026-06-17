@@ -38,7 +38,16 @@ const DebugPanel: React.FC<{
       </div>
       {show && (
         <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
-          <p className="text-xs font-semibold text-amber-600 mb-1">All unique values stored in status column:</p>
+          <p className="text-xs font-semibold text-amber-600 mb-1">Status column options (what the system knows):</p>
+          <div className="mb-2 space-y-1">
+            {(statusCol.options ?? []).map((o: any) => (
+              <div key={o.id} className="flex items-center gap-2 text-xs px-2 py-1 bg-blue-50 rounded font-mono">
+                <span className="text-blue-600 flex-1 truncate">{o.id}</span>
+                <span className="font-bold text-blue-800">→ {o.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-amber-600 mb-1">All unique values stored in row data:</p>
           {Object.entries(valueCounts).sort((a,b) => b[1]-a[1]).map(([val, count]) => {
             const optById    = statusCol.options?.find((o: any) => o.id === val);
             const optByLabel = statusCol.options?.find((o: any) => o.label?.toLowerCase() === val?.toLowerCase());
