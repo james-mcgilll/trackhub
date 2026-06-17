@@ -91,20 +91,31 @@ export function useProposalTable() {
   useEffect(() => { lsSaveCols(columns); }, [columns]);
   useEffect(() => { lsSaveRows(rows); }, [rows]);
 
-  // Try Supabase realtime in the background (doesn't block anything)
+  // Try Supabase — load from there if it has MORE data than localStorage
   useEffect(() => {
-    // Attempt to load from Supabase — if it works, sync data
     (async () => {
       try {
         const [cr, rr] = await Promise.all([
           supabase.from('proposal_columns').select('*').order('order'),
           supabase.from('proposal_rows').select('*').order('created_at'),
         ]);
-        if (!cr.error && !rr.error && cr.data.length > 0) {
-          setColumns(cr.data as Column[]);
-          setRows(rr.data as Row[]);
+        if (!cr.error && !rr.error) {
+          const sbCols = cr.data as Column[];
+          const sbRows = rr.data as Row[];
+          // Only use Supabase data if it has rows — never overwrite local with empty
+          if (sbRows.length > 0) {
+            setColumns(sbCols);
+            setRows(sbRows);
+          } else if (sbCols.length > 0 && sbRows.length === 0) {
+            // Supabase has columns but no rows — sync localStorage rows UP to Supabase
+            const localRows = lsGetRows();
+            if (localRows.length > 0) {
+              // Push local rows to Supabase in background
+              supabase.from('proposal_rows').upsert(localRows).then(() => {});
+            }
+          }
         }
-      } catch { /* Supabase not available — localStorage already loaded */ }
+      } catch { /* Supabase not available — localStorage is source of truth */ }
     })();
 
     // Realtime subscription
@@ -196,16 +207,24 @@ export function useProposalTable() {
     bg(supabase.from('proposal_rows').delete().eq('id', rowId));
   }, []);
 
-  const importRows = useCallback((newRows: Omit<Row, 'id' | 'created_at'>[]) => {
+  const importRows = useCallback(async (newRows: Omit<Row, 'id' | 'created_at'>[]) => {
     const toAdd: Row[] = newRows.map(r => ({
       ...r,
       id: uid('row'),
       created_at: new Date().toISOString(),
     }));
+    // Update state and localStorage immediately
     rowsRef.current = [...rowsRef.current, ...toAdd];
     setRows(prev => [...prev, ...toAdd]);
-    // Batch insert to Supabase
-    bg(supabase.from('proposal_rows').insert(toAdd));
+
+    // Sync to Supabase in chunks of 500 (API limit)
+    const CHUNK = 500;
+    for (let i = 0; i < toAdd.length; i += CHUNK) {
+      const chunk = toAdd.slice(i, i + CHUNK);
+      await supabase.from('proposal_rows').upsert(chunk).then(({ error }) => {
+        if (error) console.warn('Import chunk error:', error.message);
+      });
+    }
   }, []);
 
   const updateCell = useCallback((rowId: string, colId: string, value: string) => {
