@@ -4,6 +4,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { ProposalTable } from '../components/proposals/ProposalTable';
 import { AddColumnModal } from '../components/proposals/AddColumnModal';
 import { ImportModal } from '../components/proposals/ImportModal';
+import { FunnelCards } from '../components/proposals/FunnelCards';
 import { useProposalTable } from '../hooks/useProposalTable';
 import type { ColumnType, Row } from '../types/proposals';
 
@@ -14,6 +15,7 @@ export const ProposalsPage: React.FC = () => {
   const [showImport,  setShowImport]  = useState(false);
   const [search,      setSearch]      = useState('');
   const [page,        setPage]        = useState(1);
+  const [funnelFilter, setFunnelFilter] = useState<string | null>(null);
 
   const {
     columns, rows, error,
@@ -38,13 +40,47 @@ export const ProposalsPage: React.FC = () => {
     if (i < columns.length - 1) reorderColumns(colId, columns[i + 1].id, 'after');
   };
 
-  // Filter
-  const filteredRows = search.trim()
-    ? rows.filter(row =>
+  // Funnel stage order for cumulative filtering
+  const FUNNEL_ORDER = ['submitted', 'viewed', 'contacted', 'interviewed', 'hired'];
+
+  // Find the status column
+  const statusCol = columns.find(c =>
+    c.type === 'dropdown' && (
+      c.name.toLowerCase().includes('proposal status') ||
+      c.name.toLowerCase() === 'status'
+    )
+  ) ?? columns.find(c => {
+    if (c.type !== 'dropdown' || !c.options) return false;
+    return c.options.filter(o => FUNNEL_ORDER.includes(o.label.toLowerCase())).length >= 2;
+  }) ?? null;
+
+  // Get min stage index for the active funnel filter
+  const funnelMinStage = (() => {
+    if (!funnelFilter || !statusCol?.options) return -1;
+    const opt = statusCol.options.find(o => o.id === funnelFilter);
+    if (!opt) return -1;
+    return FUNNEL_ORDER.indexOf(opt.label.toLowerCase());
+  })();
+
+  // Filter rows by search + funnel
+  const filteredRows = rows.filter(row => {
+    // Search filter
+    if (search.trim()) {
+      const matchesSearch =
         row.display_id?.toLowerCase().includes(search.toLowerCase()) ||
-        Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()))
-      )
-    : rows;
+        Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
+      if (!matchesSearch) return false;
+    }
+    // Funnel filter — show rows at this stage OR BEYOND (cumulative)
+    if (funnelFilter && statusCol && funnelMinStage >= 0) {
+      const val = row.data[statusCol.id] ?? '';
+      const opt = statusCol.options?.find(o => o.id === val);
+      if (!opt) return false;
+      const rowStage = FUNNEL_ORDER.indexOf(opt.label.toLowerCase());
+      if (rowStage < funnelMinStage) return false;
+    }
+    return true;
+  });
 
   // Pagination
   const totalRows  = filteredRows.length;
@@ -55,7 +91,7 @@ export const ProposalsPage: React.FC = () => {
   const pageRows   = filteredRows.slice(pageStart, pageEnd);
 
   // Reset to page 1 when search changes
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
+  const handleSearch = (v: string) => { setSearch(v); setPage(1); setFunnelFilter(null); };
 
   // Export
   const handleExport = () => {
@@ -141,6 +177,14 @@ export const ProposalsPage: React.FC = () => {
             </button>
           </div>
         }
+      />
+
+      {/* Funnel cards */}
+      <FunnelCards
+        columns={columns}
+        rows={rows}
+        onFilterByStatus={optId => { setFunnelFilter(optId); setPage(1); }}
+        activeFilter={funnelFilter}
       />
 
       {/* Stats + pagination info */}
