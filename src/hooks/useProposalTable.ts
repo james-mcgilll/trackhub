@@ -7,22 +7,6 @@ import type { Column, Row, ColumnType } from '../types/proposals';
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 // Compute next display ID — always reads from Supabase to avoid collisions
-async function nextDisplayIdFromDB(): Promise<string> {
-  try {
-    const { data } = await supabase
-      .from('proposal_rows')
-      .select('display_id')
-      .order('created_at', { ascending: false });
-    let max = 0;
-    for (const r of (data ?? [])) {
-      const n = parseInt((r.display_id ?? '').replace('UP', ''), 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-    return `UP${String(max + 1).padStart(3, '0')}`;
-  } catch {
-    return `UP${Date.now().toString().slice(-3)}`;
-  }
-}
 
 export function useProposalTable() {
   const [columns, setColumns] = useState<Column[]>([]);
@@ -120,32 +104,50 @@ export function useProposalTable() {
 
   // ── Row operations ────────────────────────────────────────────────────────
 
-  const addRow = useCallback(async () => {
-    const displayId = await nextDisplayIdFromDB();
+  const addRow = useCallback(() => {
+    // Compute display ID instantly from current state — no network wait
+    const allIds = rowsRef.current.map(r => r.display_id ?? '');
+    let max = 0;
+    for (const id of allIds) {
+      const n = parseInt(id.replace('UP', ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+    const displayId = `UP${String(max + 1).padStart(3, '0')}`;
+
     const row: Row = {
       id: uid('row'),
       display_id: displayId,
       data: {},
       created_at: new Date().toISOString(),
     };
-    // Mark as local insert BEFORE adding to state and BEFORE DB call
+
+    // Show immediately
     localInserts.current.add(row.id);
     rowsRef.current = [...rowsRef.current, row];
     setRows(prev => [...prev, row]);
-    const { error } = await supabase.from('proposal_rows').insert(row);
-    if (error) {
-      localInserts.current.delete(row.id);
-      rowsRef.current = rowsRef.current.filter(r => r.id !== row.id);
-      setRows(prev => prev.filter(r => r.id !== row.id));
-    }
+
+    // Sync to DB in background
+    supabase.from('proposal_rows').insert(row).then(({ error }) => {
+      if (error) {
+        localInserts.current.delete(row.id);
+        rowsRef.current = rowsRef.current.filter(r => r.id !== row.id);
+        setRows(prev => prev.filter(r => r.id !== row.id));
+      }
+    });
   }, []);
 
   const duplicateRow = useCallback(async (rowId: string) => {
     const src = rowsRef.current.find(r => r.id === rowId);
     if (!src) return;
 
-    // Get next display ID from DB to avoid collisions with concurrent duplicates
-    const displayId = await nextDisplayIdFromDB();
+    // Compute a local display ID instantly — no network wait
+    const allIds = rowsRef.current.map(r => r.display_id ?? '');
+    let max = 0;
+    for (const id of allIds) {
+      const n = parseInt(id.replace('UP', ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+    const displayId = `UP${String(max + 1).padStart(3, '0')}`;
 
     const copy: Row = {
       id: uid('row'),
@@ -154,11 +156,9 @@ export function useProposalTable() {
       created_at: new Date().toISOString(),
     };
 
-    // Mark BEFORE insert
+    // Show on screen IMMEDIATELY — no waiting
     localInserts.current.add(copy.id);
     rowsRef.current = [...rowsRef.current, copy];
-
-    // Insert visually right after the source row
     setRows(prev => {
       const idx = prev.findIndex(r => r.id === rowId);
       const next = [...prev];
@@ -166,13 +166,14 @@ export function useProposalTable() {
       return next;
     });
 
-    const { error } = await supabase.from('proposal_rows').insert(copy);
-    if (error) {
-      // Rollback
-      localInserts.current.delete(copy.id);
-      rowsRef.current = rowsRef.current.filter(r => r.id !== copy.id);
-      setRows(prev => prev.filter(r => r.id !== copy.id));
-    }
+    // Sync to DB in background
+    supabase.from('proposal_rows').insert(copy).then(({ error }) => {
+      if (error) {
+        localInserts.current.delete(copy.id);
+        rowsRef.current = rowsRef.current.filter(r => r.id !== copy.id);
+        setRows(prev => prev.filter(r => r.id !== copy.id));
+      }
+    });
   }, []);
 
   const deleteRow = useCallback(async (rowId: string) => {
