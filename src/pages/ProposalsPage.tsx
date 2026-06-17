@@ -18,7 +18,7 @@ export const ProposalsPage: React.FC = () => {
   const [funnelFilter, setFunnelFilter] = useState<string | null>(null);
 
   const {
-    columns, rows, error,
+    columns, rows, loading, error,
     addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
@@ -123,6 +123,16 @@ export const ProposalsPage: React.FC = () => {
     if (safePage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
     return [1, '...', safePage - 1, safePage, safePage + 1, '...', totalPages];
   };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" style={{ borderWidth: 3 }} />
+      <div className="text-center">
+        <p className="text-sm font-semibold text-slate-700">Loading data from Supabase...</p>
+        <p className="text-xs text-slate-400 mt-1">This may take a moment for large datasets</p>
+      </div>
+    </div>
+  );
 
   if (error) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3">

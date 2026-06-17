@@ -2,15 +2,10 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import type { Column, Row, ColumnType } from '../types/proposals';
 
-// ── Local storage keys ────────────────────────────────────────────────────────
 const LS_COLS = 'trackhub_proposal_columns_v2';
 const LS_ROWS = 'trackhub_proposal_rows_v2';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-// Fire-and-forget Supabase call — never throws, never blocks UI
-function bg(p: PromiseLike<unknown>) { Promise.resolve(p).catch(() => {}); }
 
 function nextDisplayId(existingRows: Row[]): string {
   let max = 0;
@@ -21,104 +16,89 @@ function nextDisplayId(existingRows: Row[]): string {
   return `UP${String(max + 1).padStart(3, '0')}`;
 }
 
-// ── Default seed data ─────────────────────────────────────────────────────────
-const DEFAULT_COLUMNS: Column[] = [
-  { id: 'col_client',  name: 'Client Name',    type: 'text',     width: 180, order: 0, options: null },
-  { id: 'col_title',   name: 'Proposal Title', type: 'text',     width: 220, order: 1, options: null },
-  { id: 'col_value',   name: 'Value ($)',       type: 'number',   width: 130, order: 2, options: null },
-  { id: 'col_date',    name: 'Sent Date',       type: 'date',     width: 140, order: 3, options: null },
-  {
-    id: 'col_status', name: 'Status', type: 'dropdown', width: 150, order: 4,
-    options: [
-      { id: 'opt_draft',    label: 'Draft',     color: 'slate'  },
-      { id: 'opt_sent',     label: 'Sent',      color: 'blue'   },
-      { id: 'opt_review',   label: 'In Review', color: 'yellow' },
-      { id: 'opt_accepted', label: 'Accepted',  color: 'green'  },
-      { id: 'opt_rejected', label: 'Rejected',  color: 'red'    },
-    ],
-  },
-  { id: 'col_notes', name: 'Notes', type: 'text', width: 200, order: 5, options: null },
-];
-
-const DEFAULT_ROWS: Row[] = [
-  { id: 'row_1', display_id: 'UP001', data: { col_client: 'Acme Corp',        col_title: 'Website Redesign Phase 2', col_value: '45000',  col_date: '2024-12-05', col_status: 'opt_sent',     col_notes: 'Follow up Friday' }, created_at: '2024-12-01' },
-  { id: 'row_2', display_id: 'UP002', data: { col_client: 'GlobalTech',       col_title: 'ERP Integration',          col_value: '120000', col_date: '2024-12-08', col_status: 'opt_review',   col_notes: 'Awaiting VP sign-off' }, created_at: '2024-12-02' },
-  { id: 'row_3', display_id: 'UP003', data: { col_client: 'NovaTech',         col_title: 'Mobile App Development',   col_value: '78000',  col_date: '2024-11-28', col_status: 'opt_accepted', col_notes: 'Contract sent' }, created_at: '2024-12-03' },
-  { id: 'row_4', display_id: 'UP004', data: { col_client: 'DataStream',       col_title: 'Analytics Dashboard',      col_value: '32000',  col_date: '2024-12-10', col_status: 'opt_draft',    col_notes: '' }, created_at: '2024-12-04' },
-  { id: 'row_5', display_id: 'UP005', data: { col_client: 'Bright Solutions', col_title: 'Cloud Migration',          col_value: '95000',  col_date: '2024-12-01', col_status: 'opt_rejected', col_notes: 'Lost to competitor' }, created_at: '2024-12-05' },
-];
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
-function lsGetCols(): Column[] {
-  try {
-    const d = localStorage.getItem(LS_COLS);
-    return d ? JSON.parse(d) : DEFAULT_COLUMNS;
-  } catch { return DEFAULT_COLUMNS; }
-}
-
-function lsGetRows(): Row[] {
-  try {
-    const d = localStorage.getItem(LS_ROWS);
-    return d ? JSON.parse(d) : DEFAULT_ROWS;
-  } catch { return DEFAULT_ROWS; }
-}
-
 function lsSaveCols(cols: Column[]) {
-  try { localStorage.setItem(LS_COLS, JSON.stringify(cols)); } catch { /* ignore */ }
+  try { localStorage.setItem(LS_COLS, JSON.stringify(cols)); } catch {}
 }
-
 function lsSaveRows(rows: Row[]) {
-  try { localStorage.setItem(LS_ROWS, JSON.stringify(rows)); } catch { /* ignore */ }
+  try { localStorage.setItem(LS_ROWS, JSON.stringify(rows)); } catch {}
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
-export function useProposalTable() {
-  // Load from localStorage SYNCHRONOUSLY — instant, no spinner
-  const [columns, setColumns] = useState<Column[]>(lsGetCols);
-  const [rows, setRows]       = useState<Row[]>(lsGetRows);
-  const [loading]             = useState(false); // always false — no loading state needed
+function bg(p: PromiseLike<unknown>) {
+  Promise.resolve(p).catch(() => {});
+}
 
-  const rowsRef      = useRef<Row[]>(rows);
-  const colsRef      = useRef<Column[]>(columns);
+export function useProposalTable() {
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [rows,    setRows]    = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+
+  const rowsRef      = useRef<Row[]>([]);
+  const colsRef      = useRef<Column[]>([]);
   const localInserts = useRef<Set<string>>(new Set());
   const localDeletes = useRef<Set<string>>(new Set());
 
-  // Keep refs in sync
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   useEffect(() => { colsRef.current = columns; }, [columns]);
+  useEffect(() => { if (columns.length > 0) lsSaveCols(columns); }, [columns]);
+  useEffect(() => { if (rows.length > 0) lsSaveRows(rows); }, [rows]);
 
-  // Persist to localStorage whenever state changes
-  useEffect(() => { lsSaveCols(columns); }, [columns]);
-  useEffect(() => { lsSaveRows(rows); }, [rows]);
-
-  // Try Supabase — load from there if it has MORE data than localStorage
+  // ── Load from Supabase (primary source of truth) ──────────────────────────
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const [cr, rr] = await Promise.all([
-          supabase.from('proposal_columns').select('*').order('order'),
-          supabase.from('proposal_rows').select('*').order('created_at').limit(10000),
-        ]);
-        if (!cr.error && !rr.error) {
-          const sbCols = cr.data as Column[];
-          const sbRows = rr.data as Row[];
-          // Only use Supabase data if it has rows — never overwrite local with empty
-          if (sbRows.length > 0) {
-            setColumns(sbCols);
-            setRows(sbRows);
-          } else if (sbCols.length > 0 && sbRows.length === 0) {
-            // Supabase has columns but no rows — sync localStorage rows UP to Supabase
-            const localRows = lsGetRows();
-            if (localRows.length > 0) {
-              // Push local rows to Supabase in background
-              supabase.from('proposal_rows').upsert(localRows).then(() => {});
-            }
-          }
-        }
-      } catch { /* Supabase not available — localStorage is source of truth */ }
-    })();
+        // Fetch columns
+        const { data: colData, error: colErr } = await supabase
+          .from('proposal_columns').select('*').order('order');
 
-    // Realtime subscription
+        if (colErr || !colData || colData.length === 0) {
+          // Supabase empty or error — try localStorage as fallback
+          const lsCols = localStorage.getItem(LS_COLS);
+          const lsRows = localStorage.getItem(LS_ROWS);
+          if (lsCols) setColumns(JSON.parse(lsCols));
+          if (lsRows) setRows(JSON.parse(lsRows));
+          setLoading(false);
+          return;
+        }
+
+        setColumns(colData as Column[]);
+
+        // Fetch ALL rows with pagination
+        let allRows: Row[] = [];
+        const PAGE = 1000;
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('proposal_rows')
+            .select('*')
+            .order('created_at')
+            .range(from, from + PAGE - 1);
+          if (error || !data || data.length === 0) break;
+          allRows = [...allRows, ...data as Row[]];
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+
+        setRows(allRows);
+        rowsRef.current = allRows;
+      } catch (e: any) {
+        // Last resort: localStorage
+        try {
+          const lsCols = localStorage.getItem(LS_COLS);
+          const lsRows = localStorage.getItem(LS_ROWS);
+          if (lsCols) setColumns(JSON.parse(lsCols));
+          if (lsRows) setRows(JSON.parse(lsRows));
+        } catch {}
+        setError(e?.message ?? 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // ── Realtime subscriptions ────────────────────────────────────────────────
+  useEffect(() => {
     const rowCh = supabase.channel('rows_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
         ({ eventType, new: n, old: o }) => {
@@ -161,42 +141,23 @@ export function useProposalTable() {
     return () => { supabase.removeChannel(rowCh); supabase.removeChannel(colCh); };
   }, []);
 
-  // ── Row operations — all instant via localStorage ─────────────────────────
-
+  // ── Row operations ────────────────────────────────────────────────────────
   const addRow = useCallback(() => {
     const displayId = nextDisplayId(rowsRef.current);
-    const row: Row = {
-      id: uid('row'),
-      display_id: displayId,
-      data: {},
-      created_at: new Date().toISOString(),
-    };
+    const row: Row = { id: uid('row'), display_id: displayId, data: {}, created_at: new Date().toISOString() };
     localInserts.current.add(row.id);
     rowsRef.current = [...rowsRef.current, row];
     setRows(prev => [...prev, row]);
-    // Background sync to Supabase
     bg(supabase.from('proposal_rows').insert(row));
   }, []);
 
   const duplicateRow = useCallback((rowId: string) => {
     const src = rowsRef.current.find(r => r.id === rowId);
     if (!src) return;
-    const displayId = nextDisplayId(rowsRef.current);
-    const copy: Row = {
-      id: uid('row'),
-      display_id: displayId,
-      data: { ...src.data },
-      created_at: new Date().toISOString(),
-    };
+    const copy: Row = { id: uid('row'), display_id: nextDisplayId(rowsRef.current), data: { ...src.data }, created_at: new Date().toISOString() };
     localInserts.current.add(copy.id);
-    // Update ref immediately so next duplicate gets the right next ID
     rowsRef.current = [...rowsRef.current, copy];
-    setRows(prev => {
-      const idx = prev.findIndex(r => r.id === rowId);
-      const next = [...prev];
-      next.splice(idx + 1, 0, copy);
-      return next;
-    });
+    setRows(prev => { const idx = prev.findIndex(r => r.id === rowId); const next = [...prev]; next.splice(idx + 1, 0, copy); return next; });
     bg(supabase.from('proposal_rows').insert(copy));
   }, []);
 
@@ -205,55 +166,6 @@ export function useProposalTable() {
     rowsRef.current = rowsRef.current.filter(r => r.id !== rowId);
     setRows(prev => prev.filter(r => r.id !== rowId));
     bg(supabase.from('proposal_rows').delete().eq('id', rowId));
-  }, []);
-
-  const importRows = useCallback(async (
-    newRows: Omit<Row, 'id' | 'created_at'>[],
-    mode: 'skip' | 'overwrite' = 'skip'
-  ) => {
-    const toAdd: Row[] = newRows.map(r => ({
-      ...r,
-      id: uid('row'),
-      created_at: new Date().toISOString(),
-    }));
-
-    if (mode === 'overwrite') {
-      // 1. Clear state and localStorage immediately
-      rowsRef.current = toAdd;
-      setRows(toAdd);
-      lsSaveRows(toAdd);
-
-      // 2. Delete ALL existing rows from Supabase in batches
-      //    Get all existing IDs first, then delete them
-      try {
-        let deletedAll = false;
-        let attempt = 0;
-        while (!deletedAll && attempt < 10) {
-          const { data: existing } = await supabase
-            .from('proposal_rows')
-            .select('id')
-            .limit(500);
-          if (!existing || existing.length === 0) { deletedAll = true; break; }
-          const ids = existing.map((r: {id: string}) => r.id);
-          await supabase.from('proposal_rows').delete().in('id', ids);
-          attempt++;
-        }
-      } catch (e) {
-        console.warn('Delete existing rows error:', e);
-      }
-    } else {
-      // Append — add to existing
-      rowsRef.current = [...rowsRef.current, ...toAdd];
-      setRows(prev => [...prev, ...toAdd]);
-    }
-
-    // Insert new rows in chunks of 500
-    const CHUNK = 500;
-    for (let i = 0; i < toAdd.length; i += CHUNK) {
-      const chunk = toAdd.slice(i, i + CHUNK);
-      const { error } = await supabase.from('proposal_rows').insert(chunk);
-      if (error) console.warn('Import insert error:', error.message);
-    }
   }, []);
 
   const updateCell = useCallback((rowId: string, colId: string, value: string) => {
@@ -265,8 +177,50 @@ export function useProposalTable() {
     bg(supabase.from('proposal_rows').update({ data: newData }).eq('id', rowId));
   }, []);
 
-  // ── Column operations ─────────────────────────────────────────────────────
+  const importRows = useCallback(async (
+    newRows: Omit<Row, 'id' | 'created_at'>[],
+    mode: 'skip' | 'overwrite' = 'skip'
+  ) => {
+    const toAdd: Row[] = newRows.map(r => ({ ...r, id: uid('row'), created_at: new Date().toISOString() }));
 
+    if (mode === 'overwrite') {
+      rowsRef.current = toAdd;
+      setRows(toAdd);
+      lsSaveRows(toAdd);
+      // Delete all from Supabase in batches
+      let safe = 0;
+      while (safe < 20) {
+        const { data } = await supabase.from('proposal_rows').select('id').limit(500);
+        if (!data || data.length === 0) break;
+        const ids = (data as { id: string }[]).map(r => r.id);
+        await supabase.from('proposal_rows').delete().in('id', ids);
+        safe++;
+      }
+    } else {
+      rowsRef.current = [...rowsRef.current, ...toAdd];
+      setRows(prev => [...prev, ...toAdd]);
+    }
+
+    const CHUNK = 500;
+    for (let i = 0; i < toAdd.length; i += CHUNK) {
+      await supabase.from('proposal_rows').insert(toAdd.slice(i, i + CHUNK));
+    }
+  }, []);
+
+  const clearAllRows = useCallback(async () => {
+    rowsRef.current = [];
+    setRows([]);
+    lsSaveRows([]);
+    let safe = 0;
+    while (safe < 20) {
+      const { data } = await supabase.from('proposal_rows').select('id').limit(500);
+      if (!data || data.length === 0) break;
+      await supabase.from('proposal_rows').delete().in('id', (data as { id: string }[]).map(r => r.id));
+      safe++;
+    }
+  }, []);
+
+  // ── Column operations ─────────────────────────────────────────────────────
   const addColumn = useCallback((name: string, type: ColumnType, options: { label: string; color: string }[] = []) => {
     const maxOrder = colsRef.current.length > 0 ? Math.max(...colsRef.current.map(c => c.order)) : -1;
     const opts = type === 'dropdown' ? options.map(o => ({ id: uid('opt'), ...o })) : null;
@@ -278,10 +232,7 @@ export function useProposalTable() {
 
   const deleteColumn = useCallback((colId: string) => {
     setColumns(prev => prev.filter(c => c.id !== colId));
-    setRows(prev => prev.map(r => {
-      const { [colId]: _, ...rest } = r.data;
-      return { ...r, data: rest };
-    }));
+    setRows(prev => prev.map(r => { const { [colId]: _, ...rest } = r.data; return { ...r, data: rest }; }));
     bg(supabase.from('proposal_columns').delete().eq('id', colId));
   }, []);
 
@@ -291,13 +242,9 @@ export function useProposalTable() {
   }, []);
 
   const changeColumnType = useCallback((colId: string, type: ColumnType) => {
-    setColumns(prev => prev.map(c =>
-      c.id === colId ? { ...c, type, options: type === 'dropdown' ? (c.options ?? []) : null } : c
-    ));
+    setColumns(prev => prev.map(c => c.id === colId ? { ...c, type, options: type === 'dropdown' ? (c.options ?? []) : null } : c));
     const col = colsRef.current.find(c => c.id === colId);
-    bg(supabase.from('proposal_columns')
-      .update({ type, options: type === 'dropdown' ? (col?.options ?? []) : null })
-      .eq('id', colId));
+    bg(supabase.from('proposal_columns').update({ type, options: type === 'dropdown' ? (col?.options ?? []) : null }).eq('id', colId));
   }, []);
 
   const resizeColumn = useCallback((colId: string, width: number) => {
@@ -329,26 +276,9 @@ export function useProposalTable() {
     bg(supabase.from('proposal_columns').update({ options }).eq('id', colId));
   }, []);
 
-  // Nuclear clear — wipes everything from state, localStorage, and Supabase
-  const clearAllRows = useCallback(async () => {
-    rowsRef.current = [];
-    setRows([]);
-    lsSaveRows([]);
-    let safe = 0;
-    while (safe < 20) {
-      const { data } = await supabase.from('proposal_rows').select('id').limit(500);
-      if (!data || data.length === 0) break;
-      const ids = (data as {id: string}[]).map(r => r.id);
-      await supabase.from('proposal_rows').delete().in('id', ids);
-      safe++;
-    }
-  }, []);
-
   return {
     columns: [...columns].sort((a, b) => a.order - b.order),
-    rows,
-    loading,
-    error: null,
+    rows, loading, error,
     addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
