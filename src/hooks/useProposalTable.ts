@@ -118,6 +118,7 @@ export function useProposalTable() {
   const duplicateRow = useCallback(async (rowId: string) => {
     const src = rowsRef.current.find(r => r.id === rowId);
     if (!src) return;
+    // Compute displayId from the ref so rapid duplicates don't collide
     const displayId = nextRowDisplayId(rowsRef.current);
     const copy: Row = {
       id: uid('row'),
@@ -125,6 +126,8 @@ export function useProposalTable() {
       data: { ...src.data },
       created_at: new Date().toISOString(),
     };
+    // Add to ref immediately so next duplicate sees it
+    rowsRef.current = [...rowsRef.current, copy];
     localInserts.current.add(copy.id);
     setRows(prev => {
       const idx = prev.findIndex(r => r.id === rowId);
@@ -133,7 +136,10 @@ export function useProposalTable() {
       return next;
     });
     const { error } = await supabase.from('proposal_rows').insert(copy);
-    if (error) setRows(prev => prev.filter(r => r.id !== copy.id));
+    if (error) {
+      setRows(prev => prev.filter(r => r.id !== copy.id));
+      rowsRef.current = rowsRef.current.filter(r => r.id !== copy.id);
+    }
   }, []);
 
   const deleteRow = useCallback(async (rowId: string) => {
