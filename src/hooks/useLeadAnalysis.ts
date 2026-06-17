@@ -59,11 +59,8 @@ export function useLeadAnalysis(
       }
 
       const cols = colData as Column[];
-      // Use proposalColumns PROP for option ID matching (it has correct IDs matching row data)
-      // Use Supabase cols only to find which column ID to look in
-      const scFromSupabase = detectStatusCol(cols);
-      const scFromProps = detectStatusCol(proposalColumns);
-      const sc = scFromSupabase ?? scFromProps;
+      // Find status column from Supabase data (fully self-contained, no props needed)
+      const sc = detectStatusCol(cols);
 
       if (!sc) {
         setSyncStatus('No status column found');
@@ -71,17 +68,19 @@ export function useLeadAnalysis(
         return;
       }
 
-      // Use proposalColumns prop options for ID->label mapping (most reliable)
-      // These IDs match what's actually stored in row data
+      // Build option map from Supabase column options
+      // Also add prop options if available (in case they differ)
       const statusColId = sc.id;
       const optionMap: Record<string, string> = {};
-      // From props (correct IDs)
-      for (const opt of scFromProps?.options ?? []) {
-        optionMap[opt.id] = opt.label;
-        optionMap[opt.label.toLowerCase()] = opt.label;
+      
+      // From Supabase columns (primary)
+      for (const opt of sc.options ?? []) {
+        optionMap[(opt as any).id] = (opt as any).label;
+        optionMap[(opt as any).label.toLowerCase()] = (opt as any).label;
       }
-      // From Supabase (backup)
-      for (const opt of scFromSupabase?.options ?? []) {
+      // Also from props if loaded (belt and suspenders)
+      const scFromProps = detectStatusCol(proposalColumns);
+      for (const opt of scFromProps?.options ?? []) {
         optionMap[opt.id] = opt.label;
         optionMap[opt.label.toLowerCase()] = opt.label;
       }

@@ -9,66 +9,6 @@ import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 const ROWS_PER_PAGE = 100;
 
 
-// ── Debug panel — temporary, shows raw status values ─────────────────────────
-const DebugPanel: React.FC<{
-  statusCol: any;
-  proposalRows: any[];
-  laRowCount: number;
-}> = ({ statusCol, proposalRows, laRowCount }) => {
-  const [show, setShow] = React.useState(false);
-
-  // Count raw values in the status column
-  const valueCounts: Record<string, number> = {};
-  for (const row of proposalRows) {
-    const val = row.data?.[statusCol.id] ?? '(empty)';
-    valueCounts[val] = (valueCounts[val] ?? 0) + 1;
-  }
-
-  const LA_STAGES = ['contacted', 'interviewed', 'hired'];
-
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-bold text-amber-700">
-          Debug: Status column "{statusCol.name}" · {proposalRows.length} total rows · {laRowCount} in Lead Analysis
-        </p>
-        <button onClick={() => setShow(s => !s)} className="text-xs text-amber-600 underline">
-          {show ? 'Hide' : 'Show raw values'}
-        </button>
-      </div>
-      {show && (
-        <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
-          <p className="text-xs font-semibold text-amber-600 mb-1">Status column options (what the system knows):</p>
-          <div className="mb-2 space-y-1">
-            {(statusCol.options ?? []).map((o: any) => (
-              <div key={o.id} className="flex items-center gap-2 text-xs px-2 py-1 bg-blue-50 rounded font-mono">
-                <span className="text-blue-600 flex-1 truncate">{o.id}</span>
-                <span className="font-bold text-blue-800">→ {o.label}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs font-semibold text-amber-600 mb-1">All unique values stored in row data:</p>
-          {Object.entries(valueCounts).sort((a,b) => b[1]-a[1]).map(([val, count]) => {
-            const optById    = statusCol.options?.find((o: any) => o.id === val);
-            const optByLabel = statusCol.options?.find((o: any) => o.label?.toLowerCase() === val?.toLowerCase());
-            const label      = optById?.label ?? optByLabel?.label ?? null;
-            const isQualify  = label
-              ? LA_STAGES.includes(label.toLowerCase())
-              : LA_STAGES.includes(val?.toLowerCase());
-            return (
-              <div key={val} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${isQualify ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-slate-600'}`}>
-                <span className="font-mono flex-shrink-0 w-8 text-right font-bold">{count}</span>
-                <span className="flex-1 truncate">{val}</span>
-                {label && <span className="text-slate-400">→ {label}</span>}
-                {isQualify && <span className="text-emerald-600 font-bold">✓ qualifies</span>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const LeadAnalysisPage: React.FC = () => {
   const { columns: proposalColumns, rows: proposalRows } = useProposalTable();
@@ -205,10 +145,6 @@ export const LeadAnalysisPage: React.FC = () => {
         </div>
       )}
 
-      {/* Debug panel — shows raw status values so we can see why leads are missing */}
-      {statusCol && proposalRows.length > 0 && (
-        <DebugPanel statusCol={statusCol} proposalRows={proposalRows} laRowCount={mergedRows.length} />
-      )}
 
       {/* Status summary cards — cumulative funnel */}
       <div className="grid grid-cols-3 gap-3">
