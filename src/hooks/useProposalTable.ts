@@ -218,25 +218,41 @@ export function useProposalTable() {
     }));
 
     if (mode === 'overwrite') {
-      // Clear everything first — both state and Supabase
+      // 1. Clear state and localStorage immediately
       rowsRef.current = toAdd;
       setRows(toAdd);
+      lsSaveRows(toAdd);
 
-      // Delete all existing rows from Supabase then insert new ones
-      await supabase.from('proposal_rows').delete().neq('id', '__none__');
+      // 2. Delete ALL existing rows from Supabase in batches
+      //    Get all existing IDs first, then delete them
+      try {
+        let deletedAll = false;
+        let attempt = 0;
+        while (!deletedAll && attempt < 10) {
+          const { data: existing } = await supabase
+            .from('proposal_rows')
+            .select('id')
+            .limit(500);
+          if (!existing || existing.length === 0) { deletedAll = true; break; }
+          const ids = existing.map((r: {id: string}) => r.id);
+          await supabase.from('proposal_rows').delete().in('id', ids);
+          attempt++;
+        }
+      } catch (e) {
+        console.warn('Delete existing rows error:', e);
+      }
     } else {
-      // Append mode — add to existing
+      // Append — add to existing
       rowsRef.current = [...rowsRef.current, ...toAdd];
       setRows(prev => [...prev, ...toAdd]);
     }
 
-    // Sync to Supabase in chunks of 500
+    // Insert new rows in chunks of 500
     const CHUNK = 500;
     for (let i = 0; i < toAdd.length; i += CHUNK) {
       const chunk = toAdd.slice(i, i + CHUNK);
-      await supabase.from('proposal_rows').upsert(chunk).then(({ error }) => {
-        if (error) console.warn('Import chunk error:', error.message);
-      });
+      const { error } = await supabase.from('proposal_rows').insert(chunk);
+      if (error) console.warn('Import insert error:', error.message);
     }
   }, []);
 
