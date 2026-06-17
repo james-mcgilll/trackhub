@@ -7,7 +7,7 @@ import type { PageId } from '../../App';
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: PageId;
-  onNavigate: (page: PageId) => void;
+  onNavigate: (page: PageId, highlight?: string) => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate }) => {

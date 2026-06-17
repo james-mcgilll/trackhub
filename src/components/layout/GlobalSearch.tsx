@@ -5,7 +5,7 @@ import { getFunnelStatusStyle } from '../../types/proposals';
 import type { PageId } from '../../App';
 
 interface GlobalSearchProps {
-  onNavigate: (page: PageId) => void;
+  onNavigate: (page: PageId, highlight?: string) => void;
 }
 
 interface SearchResult {
@@ -130,8 +130,8 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
     setOpen(e.target.value.length >= 2);
   };
 
-  const handleResultClick = () => {
-    onNavigate('proposals');
+  const handleResultClick = (searchTerm: string) => {
+    onNavigate('proposals', searchTerm);
     setOpen(false);
     setQuery('');
   };
@@ -202,7 +202,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
             <div className="overflow-y-auto" style={{ maxHeight: 400 }}>
               {results.map(result => (
                 <button key={result.rowId}
-                  onClick={handleResultClick}
+                  onClick={() => handleResultClick(query)}
                   className="w-full flex items-start gap-3 px-4 py-3 hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-0 text-left">
 
                   {/* Icon */}

@@ -10,7 +10,7 @@ interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
   currentPage: PageId;
-  onNavigate: (page: PageId) => void;
+  onNavigate: (page: PageId, highlight?: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({

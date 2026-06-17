@@ -7,7 +7,7 @@ import type { PageId } from '../../App';
 interface HeaderProps {
   onMobileMenuOpen: () => void;
   currentPage: PageId;
-  onNavigate: (page: PageId) => void;
+  onNavigate: (page: PageId, highlight?: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen, currentPage, onNavigate }) => {

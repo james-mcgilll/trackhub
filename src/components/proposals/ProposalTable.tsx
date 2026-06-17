@@ -7,6 +7,7 @@ import { ColumnContextMenu } from './ColumnContextMenu';
 interface ProposalTableProps {
   columns: Column[];
   rows: Row[];
+  searchHighlight?: string;
   onUpdateCell: (rowId: string, colId: string, value: string) => void;
   onDuplicateRow: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
@@ -26,7 +27,7 @@ const ID_W    = 88;
 const ACT_W   = 72;
 
 export const ProposalTable: React.FC<ProposalTableProps> = ({
-  columns, rows,
+  columns, rows, searchHighlight = '',
   onUpdateCell, onDuplicateRow, onDeleteRow,
   onRenameColumn, onChangeColumnType, onDeleteColumn, onDuplicateColumn,
   onReorderColumns, onResizeColumn, onMoveLeft, onMoveRight, onUpdateColumnOptions,
@@ -206,13 +207,16 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               </td></tr>
             ) : rows.map((row, ri) => (
               <tr key={row.id}
-                onClick={() => setSelectedRow(row.id === selectedRow ? null : row.id)}
-                className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
-                  selectedRow === row.id
-                    ? 'bg-blue-50 border-l-2 border-l-blue-400'
-                    : 'hover:bg-blue-50/30'
-                }`}
-                style={{ height: ROW_H }}>
+                  ref={el => { if (el && searchHighlight && (row.display_id?.toLowerCase().includes(searchHighlight.toLowerCase()) || Object.values(row.data).some(v => String(v).toLowerCase().includes(searchHighlight.toLowerCase())))) el.setAttribute('data-highlight-row','true'); }}
+                  onClick={() => setSelectedRow(row.id === selectedRow ? null : row.id)}
+                  className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
+                    searchHighlight && (row.display_id?.toLowerCase().includes(searchHighlight.toLowerCase()) || Object.values(row.data).some(v => String(v).toLowerCase().includes(searchHighlight.toLowerCase())))
+                      ? 'bg-amber-50 border-l-4 border-l-amber-400'
+                      : selectedRow === row.id
+                        ? 'bg-blue-50 border-l-2 border-l-blue-400'
+                        : 'hover:bg-blue-50/30'
+                  }`}
+                  style={{ height: ROW_H }}>
                 <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>
                   <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all" title={row.id}>
                     {row.display_id || `UP${String(ri + 1).padStart(3, '0')}`}

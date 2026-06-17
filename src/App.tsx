@@ -17,25 +17,68 @@ export type PageId =
   | 'lead-analysis' | 'job-analysis' | 'proposal-creation'
   | 'lead-prioritization' | 'transactions' | 'notes';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
+// Map between URL hash and PageId
+const HASH_TO_PAGE: Record<string, PageId> = {
+  '#/dashboard':           'dashboard',
+  '#/proposals':           'proposals',
+  '#/reporting':           'reporting',
+  '#/smart-analysis':      'smart-analysis',
+  '#/lead-analysis':       'lead-analysis',
+  '#/job-analysis':        'job-analysis',
+  '#/proposal-creation':   'proposal-creation',
+  '#/lead-prioritization': 'lead-prioritization',
+  '#/transactions':        'transactions',
+  '#/notes':               'notes',
+};
 
-  // Clear all localStorage on startup — Supabase is the only source of truth
+const PAGE_TO_HASH: Record<PageId, string> = {
+  'dashboard':           '#/dashboard',
+  'proposals':           '#/proposals',
+  'reporting':           '#/reporting',
+  'smart-analysis':      '#/smart-analysis',
+  'lead-analysis':       '#/lead-analysis',
+  'job-analysis':        '#/job-analysis',
+  'proposal-creation':   '#/proposal-creation',
+  'lead-prioritization': '#/lead-prioritization',
+  'transactions':        '#/transactions',
+  'notes':               '#/notes',
+};
+
+function getPageFromHash(): PageId {
+  return HASH_TO_PAGE[window.location.hash] ?? 'dashboard';
+}
+
+function App() {
+  const [currentPage, setCurrentPage] = useState<PageId>(getPageFromHash);
+  const [searchHighlight, setSearchHighlight] = useState('');
+
+  // Clear stale localStorage keys on startup
   useEffect(() => {
     const KEYS = [
-      'trackhub_proposal_columns_v2',
-      'trackhub_proposal_rows_v2',
-      'trackhub_la_columns_v1',
-      'trackhub_la_rows_v1',
-      'trackhub_lead_priority_v1',
+      'trackhub_proposal_columns_v2', 'trackhub_proposal_rows_v2',
+      'trackhub_la_columns_v1', 'trackhub_la_rows_v1', 'trackhub_lead_priority_v1',
     ];
     KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
   }, []);
 
+  // Sync URL hash → page state on browser back/forward
+  useEffect(() => {
+    const onHashChange = () => setCurrentPage(getPageFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Navigate: update state + URL hash
+  const navigate = (page: PageId, highlight = '') => {
+    setCurrentPage(page);
+    setSearchHighlight(highlight);
+    window.location.hash = PAGE_TO_HASH[page];
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':           return <DashboardPage />;
-      case 'proposals':           return <ProposalsPage />;
+      case 'proposals':           return <ProposalsPage searchHighlight={searchHighlight} onClearHighlight={() => setSearchHighlight('')} />;
       case 'reporting':           return <ReportingPage />;
       case 'smart-analysis':      return <SmartAnalysisPage />;
       case 'lead-analysis':       return <LeadAnalysisPage />;
@@ -49,9 +92,8 @@ function App() {
   };
 
   return (
-    // ProposalProvider wraps everything — data fetched ONCE, shared with all modules
     <ProposalProvider>
-      <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
+      <Layout currentPage={currentPage} onNavigate={navigate}>
         {renderPage()}
       </Layout>
     </ProposalProvider>

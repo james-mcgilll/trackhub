@@ -10,12 +10,33 @@ import type { ColumnType, Row } from '../types/proposals';
 
 const ROWS_PER_PAGE = 100;
 
-export const ProposalsPage: React.FC = () => {
+interface ProposalsPageProps {
+  searchHighlight?: string;
+  onClearHighlight?: () => void;
+}
+
+export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = '' }) => {
   const [showAddCol,  setShowAddCol]  = useState(false);
   const [showImport,  setShowImport]  = useState(false);
   const [importing,   setImporting]   = useState(false);
   const [importMsg,   setImportMsg]   = useState('');
   const [search,      setSearch]      = useState('');
+  const [highlighted, setHighlighted] = useState('');
+
+  // When searchHighlight comes in from global search, pre-fill the search box
+  // eslint-disable-next-line
+  React.useEffect(() => {
+    if (searchHighlight) {
+      setSearch(searchHighlight);
+      setHighlighted(searchHighlight);
+      setPage(1);
+      // Scroll to first result after render
+      setTimeout(() => {
+        const first = document.querySelector('[data-highlight-row]');
+        if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [searchHighlight]);
   const [page,        setPage]        = useState(1);
   const [funnelFilter, setFunnelFilter] = useState<string | null>(null);
 
@@ -248,6 +269,7 @@ export const ProposalsPage: React.FC = () => {
       <ProposalTable
         columns={columns}
         rows={pageRows}
+        searchHighlight={highlighted}
         onUpdateCell={updateCell}
         onDuplicateRow={duplicateRow}
         onDeleteRow={deleteRow}
