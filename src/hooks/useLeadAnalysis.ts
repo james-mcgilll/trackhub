@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+
 import type { LAColumn, LARow } from '../types/leadAnalysis';
 import { LA_COLUMNS_KEY, LA_ROWS_KEY, LA_QUALIFYING_STAGES } from '../types/leadAnalysis';
 import type { Column, Row } from '../types/proposals';
@@ -61,25 +62,28 @@ export function useLeadAnalysis(
     );
   }, [proposalRows, statusCol]);
 
-  // Auto-add new qualifying rows, keep existing LA rows even if status changed
+  // Always keep laRows in sync with qualifiedUniqueIds
+  // Add any missing qualified IDs, preserve existing local data
   useEffect(() => {
     if (qualifiedUniqueIds.size === 0) return;
     setLaRows(prev => {
       const existingIds = new Set(prev.map(r => r.uniqueId));
+      // Find ALL qualified IDs that are not yet in laRows
       const toAdd: LARow[] = [];
-      for (const uid of qualifiedUniqueIds) {
-        if (!existingIds.has(uid)) {
-          toAdd.push({ uniqueId: uid, localData: {}, createdAt: new Date().toISOString() });
+      for (const id of qualifiedUniqueIds) {
+        if (!existingIds.has(id)) {
+          toAdd.push({ uniqueId: id, localData: {}, createdAt: new Date().toISOString() });
         }
       }
-      if (toAdd.length === 0) return prev;
+      if (toAdd.length === 0) return prev; // nothing changed
+      // Merge and sort by ID number descending
       return [...prev, ...toAdd].sort((a, b) => {
         const na = parseInt(a.uniqueId.replace('UP', ''), 10);
         const nb = parseInt(b.uniqueId.replace('UP', ''), 10);
-        return nb - na; // newest first
+        return nb - na;
       });
     });
-  }, [qualifiedUniqueIds]);
+  }, [qualifiedUniqueIds]); // re-runs whenever proposal data changes (new rows load from Supabase)
 
   // ── Build merged view rows ───────────────────────────────────────────────────
   // Build a lookup: proposalColId -> { optionId -> label }

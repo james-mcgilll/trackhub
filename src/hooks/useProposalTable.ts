@@ -97,7 +97,7 @@ export function useProposalTable() {
       try {
         const [cr, rr] = await Promise.all([
           supabase.from('proposal_columns').select('*').order('order'),
-          supabase.from('proposal_rows').select('*').order('created_at'),
+          supabase.from('proposal_rows').select('*').order('created_at').limit(10000),
         ]);
         if (!cr.error && !rr.error) {
           const sbCols = cr.data as Column[];
