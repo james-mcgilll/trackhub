@@ -1,14 +1,9 @@
 import React from 'react';
-import { BarChart3, Brain, TrendingUp, Briefcase, FilePlus, CreditCard } from 'lucide-react';
+import { Brain, TrendingUp, Briefcase, FilePlus, CreditCard } from 'lucide-react';
 import { PlaceholderModule } from '../components/ui/PlaceholderModule';
 import { PageHeader } from '../components/ui/PageHeader';
 
-export const ReportingPage: React.FC = () => (
-  <div>
-    <PageHeader title="Reporting" subtitle="Detailed reports and data exports" />
-    <PlaceholderModule moduleName="Reporting" description="Generate detailed reports, analyze trends, and export your business data." icon={BarChart3} />
-  </div>
-);
+
 
 export const SmartAnalysisPage: React.FC = () => (
   <div>
