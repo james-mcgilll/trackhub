@@ -1,12 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
-import { seedIfEmpty } from '../utils/seedData';
 import type { Column, Row, ColumnType } from '../types/proposals';
 
-// ── ID helpers ────────────────────────────────────────────────────────────────
+// ── Local storage keys ────────────────────────────────────────────────────────
+const LS_COLS = 'trackhub_proposal_columns_v2';
+const LS_ROWS = 'trackhub_proposal_rows_v2';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const uid = (p = 'id') => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-// Compute next display ID from a list of existing rows
+// Fire-and-forget Supabase call — never throws, never blocks UI
+function bg(p: PromiseLike<unknown>) { Promise.resolve(p).catch(() => {}); }
+
 function nextDisplayId(existingRows: Row[]): string {
   let max = 0;
   for (const r of existingRows) {
@@ -16,72 +21,108 @@ function nextDisplayId(existingRows: Row[]): string {
   return `UP${String(max + 1).padStart(3, '0')}`;
 }
 
-// Compute next display ID — always reads from Supabase to avoid collisions
+// ── Default seed data ─────────────────────────────────────────────────────────
+const DEFAULT_COLUMNS: Column[] = [
+  { id: 'col_client',  name: 'Client Name',    type: 'text',     width: 180, order: 0, options: null },
+  { id: 'col_title',   name: 'Proposal Title', type: 'text',     width: 220, order: 1, options: null },
+  { id: 'col_value',   name: 'Value ($)',       type: 'number',   width: 130, order: 2, options: null },
+  { id: 'col_date',    name: 'Sent Date',       type: 'date',     width: 140, order: 3, options: null },
+  {
+    id: 'col_status', name: 'Status', type: 'dropdown', width: 150, order: 4,
+    options: [
+      { id: 'opt_draft',    label: 'Draft',     color: 'slate'  },
+      { id: 'opt_sent',     label: 'Sent',      color: 'blue'   },
+      { id: 'opt_review',   label: 'In Review', color: 'yellow' },
+      { id: 'opt_accepted', label: 'Accepted',  color: 'green'  },
+      { id: 'opt_rejected', label: 'Rejected',  color: 'red'    },
+    ],
+  },
+  { id: 'col_notes', name: 'Notes', type: 'text', width: 200, order: 5, options: null },
+];
 
+const DEFAULT_ROWS: Row[] = [
+  { id: 'row_1', display_id: 'UP001', data: { col_client: 'Acme Corp',        col_title: 'Website Redesign Phase 2', col_value: '45000',  col_date: '2024-12-05', col_status: 'opt_sent',     col_notes: 'Follow up Friday' }, created_at: '2024-12-01' },
+  { id: 'row_2', display_id: 'UP002', data: { col_client: 'GlobalTech',       col_title: 'ERP Integration',          col_value: '120000', col_date: '2024-12-08', col_status: 'opt_review',   col_notes: 'Awaiting VP sign-off' }, created_at: '2024-12-02' },
+  { id: 'row_3', display_id: 'UP003', data: { col_client: 'NovaTech',         col_title: 'Mobile App Development',   col_value: '78000',  col_date: '2024-11-28', col_status: 'opt_accepted', col_notes: 'Contract sent' }, created_at: '2024-12-03' },
+  { id: 'row_4', display_id: 'UP004', data: { col_client: 'DataStream',       col_title: 'Analytics Dashboard',      col_value: '32000',  col_date: '2024-12-10', col_status: 'opt_draft',    col_notes: '' }, created_at: '2024-12-04' },
+  { id: 'row_5', display_id: 'UP005', data: { col_client: 'Bright Solutions', col_title: 'Cloud Migration',          col_value: '95000',  col_date: '2024-12-01', col_status: 'opt_rejected', col_notes: 'Lost to competitor' }, created_at: '2024-12-05' },
+];
+
+// ── localStorage helpers ──────────────────────────────────────────────────────
+function lsGetCols(): Column[] {
+  try {
+    const d = localStorage.getItem(LS_COLS);
+    return d ? JSON.parse(d) : DEFAULT_COLUMNS;
+  } catch { return DEFAULT_COLUMNS; }
+}
+
+function lsGetRows(): Row[] {
+  try {
+    const d = localStorage.getItem(LS_ROWS);
+    return d ? JSON.parse(d) : DEFAULT_ROWS;
+  } catch { return DEFAULT_ROWS; }
+}
+
+function lsSaveCols(cols: Column[]) {
+  try { localStorage.setItem(LS_COLS, JSON.stringify(cols)); } catch { /* ignore */ }
+}
+
+function lsSaveRows(rows: Row[]) {
+  try { localStorage.setItem(LS_ROWS, JSON.stringify(rows)); } catch { /* ignore */ }
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useProposalTable() {
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [rows, setRows]       = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  // Load from localStorage SYNCHRONOUSLY — instant, no spinner
+  const [columns, setColumns] = useState<Column[]>(lsGetCols);
+  const [rows, setRows]       = useState<Row[]>(lsGetRows);
+  const [loading]             = useState(false); // always false — no loading state needed
 
-  const rowsRef      = useRef<Row[]>([]);
-  // IDs we inserted locally — suppress the realtime echo
+  const rowsRef      = useRef<Row[]>(rows);
+  const colsRef      = useRef<Column[]>(columns);
   const localInserts = useRef<Set<string>>(new Set());
-  // IDs we deleted locally — suppress the realtime echo
   const localDeletes = useRef<Set<string>>(new Set());
 
+  // Keep refs in sync
   useEffect(() => { rowsRef.current = rows; }, [rows]);
+  useEffect(() => { colsRef.current = columns; }, [columns]);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // Persist to localStorage whenever state changes
+  useEffect(() => { lsSaveCols(columns); }, [columns]);
+  useEffect(() => { lsSaveRows(rows); }, [rows]);
+
+  // Try Supabase realtime in the background (doesn't block anything)
   useEffect(() => {
+    // Attempt to load from Supabase — if it works, sync data
     (async () => {
-      setLoading(true);
       try {
-        await seedIfEmpty();
         const [cr, rr] = await Promise.all([
           supabase.from('proposal_columns').select('*').order('order'),
           supabase.from('proposal_rows').select('*').order('created_at'),
         ]);
-        if (cr.error) throw cr.error;
-        if (rr.error) throw rr.error;
-        setColumns(cr.data as Column[]);
-        setRows(rr.data as Row[]);
-      } catch (e: any) {
-        setError(e.message ?? 'Failed to load');
-      } finally {
-        setLoading(false);
-      }
+        if (!cr.error && !rr.error && cr.data.length > 0) {
+          setColumns(cr.data as Column[]);
+          setRows(rr.data as Row[]);
+        }
+      } catch { /* Supabase not available — localStorage already loaded */ }
     })();
-  }, []);
 
-  // ── Realtime ──────────────────────────────────────────────────────────────
-  useEffect(() => {
+    // Realtime subscription
     const rowCh = supabase.channel('rows_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
         ({ eventType, new: n, old: o }) => {
           if (eventType === 'INSERT') {
             const r = n as Row;
-            // If WE inserted this row, skip the echo — we already have it
-            if (localInserts.current.has(r.id)) {
-              localInserts.current.delete(r.id);
-              return;
-            }
-            // Another user inserted — add only if not already present
+            if (localInserts.current.has(r.id)) { localInserts.current.delete(r.id); return; }
             setRows(prev => prev.find(x => x.id === r.id) ? prev : [...prev, r]);
           }
           if (eventType === 'UPDATE') {
             const r = n as Row;
-            // Always apply updates (cell edits from any user)
             setRows(prev => prev.map(x => x.id === r.id ? r : x));
           }
           if (eventType === 'DELETE') {
             const r = o as Row;
-            // If WE deleted this row, skip the echo
-            if (localDeletes.current.has(r.id)) {
-              localDeletes.current.delete(r.id);
-              return;
-            }
-            // Another user deleted
+            if (localDeletes.current.has(r.id)) { localDeletes.current.delete(r.id); return; }
             setRows(prev => prev.filter(x => x.id !== r.id));
           }
         }
@@ -106,50 +147,38 @@ export function useProposalTable() {
         }
       ).subscribe();
 
-    return () => {
-      supabase.removeChannel(rowCh);
-      supabase.removeChannel(colCh);
-    };
+    return () => { supabase.removeChannel(rowCh); supabase.removeChannel(colCh); };
   }, []);
 
-  // ── Row operations ────────────────────────────────────────────────────────
+  // ── Row operations — all instant via localStorage ─────────────────────────
 
   const addRow = useCallback(() => {
+    const displayId = nextDisplayId(rowsRef.current);
     const row: Row = {
       id: uid('row'),
-      display_id: nextDisplayId(rowsRef.current),  // read BEFORE updating ref
+      display_id: displayId,
       data: {},
       created_at: new Date().toISOString(),
     };
-
-    // Update ref immediately so next call computes correct next ID
     localInserts.current.add(row.id);
     rowsRef.current = [...rowsRef.current, row];
     setRows(prev => [...prev, row]);
-
-    // Sync to DB in background
-    supabase.from('proposal_rows').insert(row).then(({ error }) => {
-      if (error) {
-        localInserts.current.delete(row.id);
-        rowsRef.current = rowsRef.current.filter(r => r.id !== row.id);
-        setRows(prev => prev.filter(r => r.id !== row.id));
-      }
-    });
+    // Background sync to Supabase
+    bg(supabase.from('proposal_rows').insert(row));
   }, []);
 
-  const duplicateRow = useCallback(async (rowId: string) => {
+  const duplicateRow = useCallback((rowId: string) => {
     const src = rowsRef.current.find(r => r.id === rowId);
     if (!src) return;
-
+    const displayId = nextDisplayId(rowsRef.current);
     const copy: Row = {
       id: uid('row'),
-      display_id: nextDisplayId(rowsRef.current),  // read BEFORE updating ref
+      display_id: displayId,
       data: { ...src.data },
       created_at: new Date().toISOString(),
     };
-
-    // Show on screen IMMEDIATELY — no waiting
     localInserts.current.add(copy.id);
+    // Update ref immediately so next duplicate gets the right next ID
     rowsRef.current = [...rowsRef.current, copy];
     setRows(prev => {
       const idx = prev.findIndex(r => r.id === rowId);
@@ -157,90 +186,67 @@ export function useProposalTable() {
       next.splice(idx + 1, 0, copy);
       return next;
     });
-
-    // Sync to DB in background
-    supabase.from('proposal_rows').insert(copy).then(({ error }) => {
-      if (error) {
-        localInserts.current.delete(copy.id);
-        rowsRef.current = rowsRef.current.filter(r => r.id !== copy.id);
-        setRows(prev => prev.filter(r => r.id !== copy.id));
-      }
-    });
+    bg(supabase.from('proposal_rows').insert(copy));
   }, []);
 
-  const deleteRow = useCallback(async (rowId: string) => {
-    const snap = rowsRef.current.find(r => r.id === rowId);
-    // Mark BEFORE delete
+  const deleteRow = useCallback((rowId: string) => {
     localDeletes.current.add(rowId);
     rowsRef.current = rowsRef.current.filter(r => r.id !== rowId);
     setRows(prev => prev.filter(r => r.id !== rowId));
-    const { error } = await supabase.from('proposal_rows').delete().eq('id', rowId);
-    if (error && snap) {
-      localDeletes.current.delete(rowId);
-      rowsRef.current = [...rowsRef.current, snap];
-      setRows(prev => [...prev, snap]);
-    }
+    bg(supabase.from('proposal_rows').delete().eq('id', rowId));
   }, []);
 
-  const updateCell = useCallback(async (rowId: string, colId: string, value: string) => {
+  const updateCell = useCallback((rowId: string, colId: string, value: string) => {
     const row = rowsRef.current.find(r => r.id === rowId);
     if (!row) return;
     const newData = { ...row.data, [colId]: value };
     rowsRef.current = rowsRef.current.map(r => r.id === rowId ? { ...r, data: newData } : r);
     setRows(prev => prev.map(r => r.id === rowId ? { ...r, data: newData } : r));
-    await supabase.from('proposal_rows').update({ data: newData }).eq('id', rowId);
+    bg(supabase.from('proposal_rows').update({ data: newData }).eq('id', rowId));
   }, []);
 
   // ── Column operations ─────────────────────────────────────────────────────
 
-  const addColumn = useCallback(async (name: string, type: ColumnType, options: { label: string; color: string }[] = []) => {
-    const maxOrder = columns.length > 0 ? Math.max(...columns.map(c => c.order)) : -1;
+  const addColumn = useCallback((name: string, type: ColumnType, options: { label: string; color: string }[] = []) => {
+    const maxOrder = colsRef.current.length > 0 ? Math.max(...colsRef.current.map(c => c.order)) : -1;
     const opts = type === 'dropdown' ? options.map(o => ({ id: uid('opt'), ...o })) : null;
     const col: Column = { id: uid('col'), name, type, width: 160, order: maxOrder + 1, options: opts };
     localInserts.current.add(col.id);
     setColumns(prev => [...prev, col].sort((a, b) => a.order - b.order));
-    const { error } = await supabase.from('proposal_columns').insert(col);
-    if (error) {
-      localInserts.current.delete(col.id);
-      setColumns(prev => prev.filter(c => c.id !== col.id));
-    }
-  }, [columns]);
+    bg(supabase.from('proposal_columns').insert(col));
+  }, []);
 
-  const deleteColumn = useCallback(async (colId: string) => {
+  const deleteColumn = useCallback((colId: string) => {
     setColumns(prev => prev.filter(c => c.id !== colId));
-    setRows(prev => prev.map(r => { const { [colId]: _, ...rest } = r.data; return { ...r, data: rest }; }));
-    const { data: allRows } = await supabase.from('proposal_rows').select('*');
-    if (allRows) {
-      await Promise.all((allRows as Row[]).map(r => {
-        const { [colId]: _, ...rest } = r.data;
-        return supabase.from('proposal_rows').update({ data: rest }).eq('id', r.id);
-      }));
-    }
-    await supabase.from('proposal_columns').delete().eq('id', colId);
+    setRows(prev => prev.map(r => {
+      const { [colId]: _, ...rest } = r.data;
+      return { ...r, data: rest };
+    }));
+    bg(supabase.from('proposal_columns').delete().eq('id', colId));
   }, []);
 
-  const renameColumn = useCallback(async (colId: string, name: string) => {
+  const renameColumn = useCallback((colId: string, name: string) => {
     setColumns(prev => prev.map(c => c.id === colId ? { ...c, name } : c));
-    await supabase.from('proposal_columns').update({ name }).eq('id', colId);
+    bg(supabase.from('proposal_columns').update({ name }).eq('id', colId));
   }, []);
 
-  const changeColumnType = useCallback(async (colId: string, type: ColumnType) => {
+  const changeColumnType = useCallback((colId: string, type: ColumnType) => {
     setColumns(prev => prev.map(c =>
       c.id === colId ? { ...c, type, options: type === 'dropdown' ? (c.options ?? []) : null } : c
     ));
-    const col = columns.find(c => c.id === colId);
-    await supabase.from('proposal_columns')
+    const col = colsRef.current.find(c => c.id === colId);
+    bg(supabase.from('proposal_columns')
       .update({ type, options: type === 'dropdown' ? (col?.options ?? []) : null })
-      .eq('id', colId);
-  }, [columns]);
-
-  const resizeColumn = useCallback(async (colId: string, width: number) => {
-    const w = Math.max(80, width);
-    setColumns(prev => prev.map(c => c.id === colId ? { ...c, width: w } : c));
-    await supabase.from('proposal_columns').update({ width: w }).eq('id', colId);
+      .eq('id', colId));
   }, []);
 
-  const reorderColumns = useCallback(async (sourceId: string, targetId: string, position: 'before' | 'after') => {
+  const resizeColumn = useCallback((colId: string, width: number) => {
+    const w = Math.max(80, width);
+    setColumns(prev => prev.map(c => c.id === colId ? { ...c, width: w } : c));
+    bg(supabase.from('proposal_columns').update({ width: w }).eq('id', colId));
+  }, []);
+
+  const reorderColumns = useCallback((sourceId: string, targetId: string, position: 'before' | 'after') => {
     if (!sourceId || !targetId || sourceId === targetId) return;
     setColumns(prev => {
       const sorted = [...prev].sort((a, b) => a.order - b.order);
@@ -252,20 +258,22 @@ export function useProposalTable() {
       const reordered = without.map((c, i) => ({ ...c, order: i }));
       reordered.forEach(c => {
         if (sorted.find(x => x.id === c.id)?.order !== c.order)
-          supabase.from('proposal_columns').update({ order: c.order }).eq('id', c.id);
+          bg(supabase.from('proposal_columns').update({ order: c.order }).eq('id', c.id));
       });
       return reordered;
     });
   }, []);
 
-  const updateColumnOptions = useCallback(async (colId: string, options: Column['options']) => {
+  const updateColumnOptions = useCallback((colId: string, options: Column['options']) => {
     setColumns(prev => prev.map(c => c.id === colId ? { ...c, options } : c));
-    await supabase.from('proposal_columns').update({ options }).eq('id', colId);
+    bg(supabase.from('proposal_columns').update({ options }).eq('id', colId));
   }, []);
 
   return {
     columns: [...columns].sort((a, b) => a.order - b.order),
-    rows, loading, error,
+    rows,
+    loading,
+    error: null,
     addRow, duplicateRow, deleteRow, updateCell,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
