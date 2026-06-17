@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, TrendingUp, Briefcase, FilePlus, CreditCard } from 'lucide-react';
+import { Brain, Briefcase, FilePlus, CreditCard } from 'lucide-react';
 import { PlaceholderModule } from '../components/ui/PlaceholderModule';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -12,12 +12,7 @@ export const SmartAnalysisPage: React.FC = () => (
   </div>
 );
 
-export const LeadAnalysisPage: React.FC = () => (
-  <div>
-    <PageHeader title="Lead Analysis" subtitle="Analyze and score your leads" />
-    <PlaceholderModule moduleName="Lead Analysis" description="Deep-dive into lead quality, conversion rates, and pipeline performance." icon={TrendingUp} />
-  </div>
-);
+
 
 export const JobAnalysisPage: React.FC = () => (
   <div>

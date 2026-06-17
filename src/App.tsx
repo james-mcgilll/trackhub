@@ -5,8 +5,9 @@ import { NotesPage } from './pages/NotesPage';
 import { ProposalsPage } from './pages/ProposalsPage';
 import { LeadPrioritizationPage } from './pages/LeadPrioritizationPage';
 import { ReportingPage } from './pages/ReportingPage';
+import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
 import {
-  SmartAnalysisPage, LeadAnalysisPage,
+  SmartAnalysisPage,
   JobAnalysisPage, ProposalCreationPage, TransactionsPage,
 } from './pages/PlaceholderPages';
 
