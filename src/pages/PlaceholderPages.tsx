@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, Brain, TrendingUp, Briefcase, FilePlus, Star, CreditCard } from 'lucide-react';
+import { BarChart3, Brain, TrendingUp, Briefcase, FilePlus, CreditCard } from 'lucide-react';
 import { PlaceholderModule } from '../components/ui/PlaceholderModule';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -38,12 +38,7 @@ export const ProposalCreationPage: React.FC = () => (
   </div>
 );
 
-export const LeadPrioritizationPage: React.FC = () => (
-  <div>
-    <PageHeader title="Lead Prioritization" subtitle="Rank and focus on your best leads" />
-    <PlaceholderModule moduleName="Lead Prioritization" description="Automatically rank and prioritize leads based on scoring criteria and potential value." icon={Star} />
-  </div>
-);
+
 
 export const TransactionsPage: React.FC = () => (
   <div>
