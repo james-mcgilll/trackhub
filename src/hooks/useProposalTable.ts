@@ -207,17 +207,30 @@ export function useProposalTable() {
     bg(supabase.from('proposal_rows').delete().eq('id', rowId));
   }, []);
 
-  const importRows = useCallback(async (newRows: Omit<Row, 'id' | 'created_at'>[]) => {
+  const importRows = useCallback(async (
+    newRows: Omit<Row, 'id' | 'created_at'>[],
+    mode: 'skip' | 'overwrite' = 'skip'
+  ) => {
     const toAdd: Row[] = newRows.map(r => ({
       ...r,
       id: uid('row'),
       created_at: new Date().toISOString(),
     }));
-    // Update state and localStorage immediately
-    rowsRef.current = [...rowsRef.current, ...toAdd];
-    setRows(prev => [...prev, ...toAdd]);
 
-    // Sync to Supabase in chunks of 500 (API limit)
+    if (mode === 'overwrite') {
+      // Clear everything first — both state and Supabase
+      rowsRef.current = toAdd;
+      setRows(toAdd);
+
+      // Delete all existing rows from Supabase then insert new ones
+      await supabase.from('proposal_rows').delete().neq('id', '__none__');
+    } else {
+      // Append mode — add to existing
+      rowsRef.current = [...rowsRef.current, ...toAdd];
+      setRows(prev => [...prev, ...toAdd]);
+    }
+
+    // Sync to Supabase in chunks of 500
     const CHUNK = 500;
     for (let i = 0; i < toAdd.length; i += CHUNK) {
       const chunk = toAdd.slice(i, i + CHUNK);

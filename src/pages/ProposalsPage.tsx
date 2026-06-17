@@ -292,7 +292,15 @@ export const ProposalsPage: React.FC = () => {
         <ImportModal
           columns={columns}
           existingRows={rows}
-          onImport={(newRows) => importRows(newRows as Omit<Row, 'id' | 'created_at'>[])}
+          onImport={(newRows, mode) => {
+            importRows(newRows as Omit<Row, 'id' | 'created_at'>[], mode);
+            // On overwrite: clear Lead Analysis rows so they resync from scratch
+            if (mode === 'overwrite') {
+              try {
+                localStorage.removeItem('trackhub_la_rows_v1');
+              } catch {}
+            }
+          }}
           onClose={() => setShowImport(false)}
         />
       )}

@@ -6,7 +6,7 @@ import { OPTION_COLOR_STYLES } from '../../types/proposals';
 interface ImportModalProps {
   columns: Column[];
   existingRows: Row[];
-  onImport: (rows: Omit<Row, 'id' | 'created_at'>[]) => void;
+  onImport: (rows: Omit<Row, 'id' | 'created_at'>[], mode: 'skip' | 'overwrite') => void;
   onClose: () => void;
 }
 
@@ -163,7 +163,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
       return { display_id, data };
     });
 
-    onImport(newRows);
+    onImport(newRows, duplicateMode);
     onClose();
   };
 
@@ -264,19 +264,28 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
                 </span>
               </div>
 
-              {/* Duplicate handling */}
-              <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3">
-                <p className="text-xs text-slate-600 font-medium flex-shrink-0">If ID already exists:</p>
+              {/* Import mode */}
+              <div className={`rounded-xl p-3 border ${duplicateMode === 'overwrite' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Import Mode</p>
                 <div className="flex gap-2">
-                  {(['skip', 'overwrite'] as const).map(m => (
-                    <button key={m} onClick={() => setDuplicateMode(m)}
-                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                        duplicateMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
-                      }`}>
-                      {m.charAt(0).toUpperCase() + m.slice(1)}
-                    </button>
-                  ))}
+                  <button onClick={() => setDuplicateMode('skip')}
+                    className={`flex-1 text-xs px-3 py-2 rounded-lg font-medium transition-colors border ${
+                      duplicateMode === 'skip' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}>
+                    Add to existing
+                  </button>
+                  <button onClick={() => setDuplicateMode('overwrite')}
+                    className={`flex-1 text-xs px-3 py-2 rounded-lg font-medium transition-colors border ${
+                      duplicateMode === 'overwrite' ? 'bg-red-600 text-white border-red-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}>
+                    Replace all data
+                  </button>
                 </div>
+                {duplicateMode === 'overwrite' && (
+                  <p className="text-xs text-red-600 font-medium mt-2">
+                    ⚠️ This will delete ALL existing rows and replace with the imported data. Lead Analysis will also be reset.
+                  </p>
+                )}
               </div>
 
               {/* Mapping table */}
