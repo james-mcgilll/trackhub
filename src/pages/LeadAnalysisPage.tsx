@@ -114,11 +114,23 @@ export const LeadAnalysisPage: React.FC = () => {
   };
 
   // Status breakdown
-  const statusCounts = mergedRows.reduce((acc, r) => {
+  // Funnel stage order — each stage includes all later stages
+  const FUNNEL_ORDER = ['Contacted', 'Interviewed', 'Hired'];
+
+  // Exact counts per stage
+  const exactCounts = mergedRows.reduce((acc, r) => {
     const s = r.currentStatus || 'Unknown';
     acc[s] = (acc[s] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  // Cumulative counts — Contacted = Contacted + Interviewed + Hired
+  const stageCounts: Record<string, number> = {};
+  for (let i = 0; i < FUNNEL_ORDER.length; i++) {
+    stageCounts[FUNNEL_ORDER[i]] = FUNNEL_ORDER
+      .slice(i) // this stage + all later stages
+      .reduce((sum, s) => sum + (exactCounts[s] ?? 0), 0);
+  }
 
 
 
@@ -198,16 +210,20 @@ export const LeadAnalysisPage: React.FC = () => {
         <DebugPanel statusCol={statusCol} proposalRows={proposalRows} laRowCount={mergedRows.length} />
       )}
 
-      {/* Status summary cards */}
+      {/* Status summary cards — cumulative funnel */}
       <div className="grid grid-cols-3 gap-3">
-        {['Contacted', 'Interviewed', 'Hired'].map(stage => (
-          <div key={stage} className="bg-white rounded-2xl border border-slate-100 p-4"
+        {[
+          { stage: 'Contacted',   color: '#7c3aed', bg: 'bg-violet-50',  border: 'border-violet-200',  desc: 'Contacted or beyond' },
+          { stage: 'Interviewed', color: '#0891b2', bg: 'bg-cyan-50',    border: 'border-cyan-200',    desc: 'Interviewed or beyond' },
+          { stage: 'Hired',       color: '#059669', bg: 'bg-emerald-50', border: 'border-emerald-200', desc: 'Hired only' },
+        ].map(({ stage, color, bg, border, desc }) => (
+          <div key={stage} className={`${bg} border ${border} rounded-2xl p-4`}
             style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">{stage}</p>
-            <p className="text-3xl font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif",
-              color: stage === 'Hired' ? '#059669' : stage === 'Interviewed' ? '#0891b2' : '#7c3aed' }}>
-              {statusCounts[stage] ?? 0}
+            <p className="text-xs font-bold uppercase tracking-wide mb-0.5" style={{ color }}>{stage}</p>
+            <p className="text-3xl font-bold leading-none" style={{ fontFamily: "'Space Grotesk', sans-serif", color }}>
+              {stageCounts[stage] ?? 0}
             </p>
+            <p className="text-xs mt-1.5" style={{ color, opacity: 0.7 }}>{desc}</p>
           </div>
         ))}
       </div>
