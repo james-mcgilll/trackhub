@@ -329,12 +329,27 @@ export function useProposalTable() {
     bg(supabase.from('proposal_columns').update({ options }).eq('id', colId));
   }, []);
 
+  // Nuclear clear — wipes everything from state, localStorage, and Supabase
+  const clearAllRows = useCallback(async () => {
+    rowsRef.current = [];
+    setRows([]);
+    lsSaveRows([]);
+    let safe = 0;
+    while (safe < 20) {
+      const { data } = await supabase.from('proposal_rows').select('id').limit(500);
+      if (!data || data.length === 0) break;
+      const ids = (data as {id: string}[]).map(r => r.id);
+      await supabase.from('proposal_rows').delete().in('id', ids);
+      safe++;
+    }
+  }, []);
+
   return {
     columns: [...columns].sort((a, b) => a.order - b.order),
     rows,
     loading,
     error: null,
-    addRow, duplicateRow, deleteRow, updateCell, importRows,
+    addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   };

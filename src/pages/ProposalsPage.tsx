@@ -19,7 +19,7 @@ export const ProposalsPage: React.FC = () => {
 
   const {
     columns, rows, error,
-    addRow, duplicateRow, deleteRow, updateCell, importRows,
+    addRow, duplicateRow, deleteRow, updateCell, importRows, clearAllRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   } = useProposalTable();
@@ -292,14 +292,13 @@ export const ProposalsPage: React.FC = () => {
         <ImportModal
           columns={columns}
           existingRows={rows}
-          onImport={(newRows, mode) => {
-            importRows(newRows as Omit<Row, 'id' | 'created_at'>[], mode);
-            // On overwrite: clear Lead Analysis rows so they resync from scratch
+          onImport={async (newRows, mode) => {
             if (mode === 'overwrite') {
-              try {
-                localStorage.removeItem('trackhub_la_rows_v1');
-              } catch {}
+              // Clear everything first, then import fresh
+              await clearAllRows();
+              localStorage.removeItem('trackhub_la_rows_v1');
             }
+            importRows(newRows as Omit<Row, 'id' | 'created_at'>[], mode);
           }}
           onClose={() => setShowImport(false)}
         />
