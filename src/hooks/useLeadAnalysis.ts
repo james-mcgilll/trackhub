@@ -89,11 +89,28 @@ export function useLeadAnalysis(
       setSyncStatus(`Processing ${allRows.length} rows...`);
 
       // Step 3: Find qualifying IDs
+      // Match by option ID OR by label directly (handles both storage formats)
       const qualifyingIds: string[] = [];
       for (const row of allRows) {
         const val = row.data?.[sc.id] ?? '';
-        const opt = sc.options?.find(o => o.id === val);
-        if (opt && LA_QUALIFYING_STAGES.includes(opt.label.toLowerCase())) {
+        if (!val) continue;
+
+        // Try matching by option ID first
+        const optById = sc.options?.find(o => o.id === val);
+        if (optById && LA_QUALIFYING_STAGES.includes(optById.label.toLowerCase())) {
+          if (row.display_id) qualifyingIds.push(row.display_id);
+          continue;
+        }
+
+        // Try matching by label directly (e.g. value stored as "Contacted")
+        if (LA_QUALIFYING_STAGES.includes(val.toLowerCase())) {
+          if (row.display_id) qualifyingIds.push(row.display_id);
+          continue;
+        }
+
+        // Try matching by label case-insensitive via options
+        const optByLabel = sc.options?.find(o => o.label.toLowerCase() === val.toLowerCase());
+        if (optByLabel && LA_QUALIFYING_STAGES.includes(optByLabel.label.toLowerCase())) {
           if (row.display_id) qualifyingIds.push(row.display_id);
         }
       }
@@ -141,10 +158,14 @@ export function useLeadAnalysis(
     const qualifyingIds: string[] = [];
     for (const row of proposalRows) {
       const val = row.data[statusCol.id] ?? '';
-      const opt = statusCol.options?.find(o => o.id === val);
-      if (opt && LA_QUALIFYING_STAGES.includes(opt.label.toLowerCase())) {
-        if (row.display_id) qualifyingIds.push(row.display_id);
-      }
+      if (!val) continue;
+      const optById    = statusCol.options?.find(o => o.id === val);
+      const optByLabel = statusCol.options?.find(o => o.label.toLowerCase() === val.toLowerCase());
+      const matched    = optById ?? optByLabel;
+      const isQualify  = matched
+        ? LA_QUALIFYING_STAGES.includes(matched.label.toLowerCase())
+        : LA_QUALIFYING_STAGES.includes(val.toLowerCase());
+      if (isQualify && row.display_id) qualifyingIds.push(row.display_id);
     }
     setLaRows(prev => {
       const existingMap: Record<string, LARow> = {};
