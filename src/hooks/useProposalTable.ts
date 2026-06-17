@@ -196,6 +196,18 @@ export function useProposalTable() {
     bg(supabase.from('proposal_rows').delete().eq('id', rowId));
   }, []);
 
+  const importRows = useCallback((newRows: Omit<Row, 'id' | 'created_at'>[]) => {
+    const toAdd: Row[] = newRows.map(r => ({
+      ...r,
+      id: uid('row'),
+      created_at: new Date().toISOString(),
+    }));
+    rowsRef.current = [...rowsRef.current, ...toAdd];
+    setRows(prev => [...prev, ...toAdd]);
+    // Batch insert to Supabase
+    bg(supabase.from('proposal_rows').insert(toAdd));
+  }, []);
+
   const updateCell = useCallback((rowId: string, colId: string, value: string) => {
     const row = rowsRef.current.find(r => r.id === rowId);
     if (!row) return;
@@ -274,7 +286,7 @@ export function useProposalTable() {
     rows,
     loading,
     error: null,
-    addRow, duplicateRow, deleteRow, updateCell,
+    addRow, duplicateRow, deleteRow, updateCell, importRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   };

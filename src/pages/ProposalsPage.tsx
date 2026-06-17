@@ -1,43 +1,63 @@
 import React, { useState } from 'react';
-import { Plus, Columns, Download, Search, Loader2, AlertCircle, Wifi } from 'lucide-react';
+import { Plus, Columns, Download, Search, Wifi, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ProposalTable } from '../components/proposals/ProposalTable';
 import { AddColumnModal } from '../components/proposals/AddColumnModal';
+import { ImportModal } from '../components/proposals/ImportModal';
 import { useProposalTable } from '../hooks/useProposalTable';
-import type { ColumnType } from '../types/proposals';
+import type { ColumnType, Row } from '../types/proposals';
+
+const ROWS_PER_PAGE = 100;
 
 export const ProposalsPage: React.FC = () => {
-  const [showAddCol, setShowAddCol] = useState(false);
-  const [search, setSearch] = useState('');
+  const [showAddCol,  setShowAddCol]  = useState(false);
+  const [showImport,  setShowImport]  = useState(false);
+  const [search,      setSearch]      = useState('');
+  const [page,        setPage]        = useState(1);
 
   const {
-    columns, rows, loading, error,
-    addRow, duplicateRow, deleteRow, updateCell,
+    columns, rows, error,
+    addRow, duplicateRow, deleteRow, updateCell, importRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   } = useProposalTable();
 
-  // Duplicate column helper
   const duplicateColumn = (colId: string) => {
     const src = columns.find(c => c.id === colId);
     if (!src) return;
     addColumn(`${src.name} (copy)`, src.type as ColumnType, src.options?.map(o => ({ label: o.label, color: o.color })) ?? []);
   };
 
-  // Move left/right helpers
   const moveLeft = (colId: string) => {
     const i = columns.findIndex(c => c.id === colId);
     if (i > 0) reorderColumns(colId, columns[i - 1].id, 'before');
   };
+
   const moveRight = (colId: string) => {
     const i = columns.findIndex(c => c.id === colId);
     if (i < columns.length - 1) reorderColumns(colId, columns[i + 1].id, 'after');
   };
 
+  // Filter
   const filteredRows = search.trim()
-    ? rows.filter(row => Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase())))
+    ? rows.filter(row =>
+        row.display_id?.toLowerCase().includes(search.toLowerCase()) ||
+        Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()))
+      )
     : rows;
 
+  // Pagination
+  const totalRows  = filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
+  const safePage   = Math.min(page, totalPages);
+  const pageStart  = (safePage - 1) * ROWS_PER_PAGE;
+  const pageEnd    = pageStart + ROWS_PER_PAGE;
+  const pageRows   = filteredRows.slice(pageStart, pageEnd);
+
+  // Reset to page 1 when search changes
+  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
+
+  // Export
   const handleExport = () => {
     const headers = columns.map(c => `"${c.name}"`).join(',');
     const lines = rows.map(row =>
@@ -54,19 +74,18 @@ export const ProposalsPage: React.FC = () => {
     a.click();
   };
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <Loader2 size={28} className="text-blue-500 animate-spin" />
-      <p className="text-sm text-slate-500">Loading proposals...</p>
-    </div>
-  );
+  // Page numbers to show (max 7 buttons)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (safePage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
+    if (safePage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, '...', safePage - 1, safePage, safePage + 1, '...', totalPages];
+  };
 
   if (error) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <AlertCircle size={28} className="text-red-400" />
-      <p className="text-sm text-slate-600 font-medium">Failed to load</p>
-      <p className="text-xs text-slate-400">{error}</p>
-      <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700">Retry</button>
+      <p className="text-sm text-slate-600 font-medium">Failed to load data</p>
+      <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-xl">Retry</button>
     </div>
   );
 
@@ -77,41 +96,80 @@ export const ProposalsPage: React.FC = () => {
         subtitle="Manage proposal records in a flexible table view."
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Live sync badge */}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl">
               <Wifi size={12} className="text-emerald-500" />
               <span className="text-xs font-medium text-emerald-600">Live sync</span>
             </div>
-            <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-blue-300 transition-colors" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+
+            {/* Search */}
+            <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-blue-300 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <Search size={14} className="text-slate-400" />
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" value={search} onChange={e => handleSearch(e.target.value)}
                 placeholder="Search..." className="text-sm text-slate-600 placeholder-slate-400 outline-none bg-transparent w-32" />
             </div>
-            <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+
+            {/* Export */}
+            <button onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <Download size={14} /><span className="hidden sm:inline">Export</span>
             </button>
-            <button onClick={() => setShowAddCol(true)} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+
+            {/* Import */}
+            <button onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <Upload size={14} /><span className="hidden sm:inline">Import</span>
+            </button>
+
+            {/* Add Column */}
+            <button onClick={() => setShowAddCol(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <Columns size={14} /><span className="hidden sm:inline">Add Column</span>
             </button>
-            <button onClick={addRow} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200">
+
+            {/* Add Row */}
+            <button onClick={addRow}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200">
               <Plus size={14} />Add Row
             </button>
           </div>
         }
       />
 
-      <div className="flex items-center gap-4 text-sm text-slate-500">
-        <span><strong className="text-slate-800 font-semibold">{filteredRows.length}</strong>{search ? ` of ${rows.length} rows` : ' rows'}</span>
+      {/* Stats + pagination info */}
+      <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
+        <span>
+          <strong className="text-slate-800 font-semibold">{totalRows}</strong>
+          {search ? ` of ${rows.length} rows` : ' rows'}
+        </span>
         <span className="text-slate-300">|</span>
         <span><strong className="text-slate-800 font-semibold">{columns.length}</strong> columns</span>
-        {search && <button onClick={() => setSearch('')} className="text-blue-600 text-xs font-medium">Clear</button>}
+        {search && (
+          <button onClick={() => handleSearch('')} className="text-blue-600 text-xs font-medium">
+            Clear search
+          </button>
+        )}
+        {totalPages > 1 && (
+          <>
+            <span className="text-slate-300">|</span>
+            <span>
+              Showing <strong className="text-slate-700">{pageStart + 1}–{Math.min(pageEnd, totalRows)}</strong> of <strong className="text-slate-700">{totalRows}</strong>
+            </span>
+          </>
+        )}
         <span className="ml-auto text-xs text-slate-400 hidden md:block">
-          Double-click a column name to rename · Right-click a column header for options · Drag ⠿ to reorder
+          Double-click column name to rename · Right-click column header for options
         </span>
       </div>
 
+      {/* Table */}
       <ProposalTable
         columns={columns}
-        rows={filteredRows}
+        rows={pageRows}
         onUpdateCell={updateCell}
         onDuplicateRow={duplicateRow}
         onDeleteRow={deleteRow}
@@ -126,10 +184,66 @@ export const ProposalsPage: React.FC = () => {
         onUpdateColumnOptions={(colId, opts) => updateColumnOptions(colId, opts)}
       />
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Prev */}
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage === 1}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+          >
+            <ChevronLeft size={15} /> Previous
+          </button>
+
+          {/* Page numbers */}
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((p, i) =>
+              p === '...' ? (
+                <span key={`ellipsis-${i}`} className="px-2 text-slate-400 text-sm">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p as number)}
+                  className={`w-9 h-9 rounded-xl text-sm font-medium transition-colors ${
+                    safePage === p
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+          </div>
+
+          {/* Next */}
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage === totalPages}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+          >
+            Next <ChevronRight size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* Modals */}
       {showAddCol && (
         <AddColumnModal
           onAdd={(name, type, opts) => addColumn(name, type, opts)}
           onClose={() => setShowAddCol(false)}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal
+          columns={columns}
+          existingRows={rows}
+          onImport={(newRows) => importRows(newRows as Omit<Row, 'id' | 'created_at'>[])}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>
