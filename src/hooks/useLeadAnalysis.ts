@@ -59,12 +59,31 @@ export function useLeadAnalysis(
       }
 
       const cols = colData as Column[];
-      const sc = detectStatusCol(cols);
+      // Use proposalColumns PROP for option ID matching (it has correct IDs matching row data)
+      // Use Supabase cols only to find which column ID to look in
+      const scFromSupabase = detectStatusCol(cols);
+      const scFromProps = detectStatusCol(proposalColumns);
+      const sc = scFromSupabase ?? scFromProps;
 
       if (!sc) {
         setSyncStatus('No status column found');
         syncFromProps();
         return;
+      }
+
+      // Use proposalColumns prop options for ID->label mapping (most reliable)
+      // These IDs match what's actually stored in row data
+      const statusColId = sc.id;
+      const optionMap: Record<string, string> = {};
+      // From props (correct IDs)
+      for (const opt of scFromProps?.options ?? []) {
+        optionMap[opt.id] = opt.label;
+        optionMap[opt.label.toLowerCase()] = opt.label;
+      }
+      // From Supabase (backup)
+      for (const opt of scFromSupabase?.options ?? []) {
+        optionMap[opt.id] = opt.label;
+        optionMap[opt.label.toLowerCase()] = opt.label;
       }
 
       setSyncStatus('Fetching rows...');
@@ -88,29 +107,13 @@ export function useLeadAnalysis(
 
       setSyncStatus(`Processing ${allRows.length} rows...`);
 
-      // Step 3: Find qualifying IDs
-      // Match by option ID OR by label directly (handles both storage formats)
+      // Step 3: Find qualifying IDs using combined option map
       const qualifyingIds: string[] = [];
       for (const row of allRows) {
-        const val = row.data?.[sc.id] ?? '';
+        const val = row.data?.[statusColId] ?? '';
         if (!val) continue;
-
-        // Try matching by option ID first
-        const optById = sc.options?.find(o => o.id === val);
-        if (optById && LA_QUALIFYING_STAGES.includes(optById.label.toLowerCase())) {
-          if (row.display_id) qualifyingIds.push(row.display_id);
-          continue;
-        }
-
-        // Try matching by label directly (e.g. value stored as "Contacted")
-        if (LA_QUALIFYING_STAGES.includes(val.toLowerCase())) {
-          if (row.display_id) qualifyingIds.push(row.display_id);
-          continue;
-        }
-
-        // Try matching by label case-insensitive via options
-        const optByLabel = sc.options?.find(o => o.label.toLowerCase() === val.toLowerCase());
-        if (optByLabel && LA_QUALIFYING_STAGES.includes(optByLabel.label.toLowerCase())) {
+        const label = optionMap[val] ?? optionMap[val.toLowerCase()] ?? val;
+        if (LA_QUALIFYING_STAGES.includes(label.toLowerCase())) {
           if (row.display_id) qualifyingIds.push(row.display_id);
         }
       }
