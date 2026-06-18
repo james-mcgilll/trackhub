@@ -12,7 +12,7 @@ import type { LeadPriorityRecord } from '../types/leadPriority';
 
 export const LeadPrioritizationPage: React.FC = () => {
   const { records, loading, saveRecord, deleteRecord, getByUniqueId } = useLeadPriority();
-  const { rows: proposalRows } = useProposals();
+  const { columns: proposalColumns, rows: proposalRows } = useProposals();
 
   const [uniqueId,      setUniqueId]      = useState('');
   const [selected,      setSelected]      = useState<string[]>([]);
@@ -22,15 +22,31 @@ export const LeadPrioritizationPage: React.FC = () => {
   const [showDropdown,  setShowDropdown]  = useState(false);
   const [idSearch,      setIdSearch]      = useState('');
 
-  // All valid Unique IDs from Proposal Details
-  const allUniqueIds = useMemo(() =>
-    proposalRows.map(r => r.display_id ?? '').filter(Boolean).sort((a, b) => {
+  // Only show IDs that are in Lead Analysis (Contacted/Interviewed/Hired)
+  const LA_QUALIFYING = ['contacted', 'interviewed', 'hired'];
+
+  const statusCol = useMemo(() =>
+    proposalColumns.find(c => c.type === 'dropdown' && c.name.toLowerCase().includes('status')),
+    [proposalColumns]
+  );
+
+  const allUniqueIds = useMemo(() => {
+    if (!statusCol) return [];
+    const qualifying: string[] = [];
+    for (const row of proposalRows) {
+      const val = row.data[statusCol.id] ?? '';
+      const opt = (statusCol.options as any[])?.find((o: any) => o.id === val);
+      const label = opt?.label ?? val;
+      if (LA_QUALIFYING.includes(label.toLowerCase()) && row.display_id) {
+        qualifying.push(row.display_id);
+      }
+    }
+    return qualifying.sort((a, b) => {
       const na = parseInt(a.replace('UP', ''), 10);
       const nb = parseInt(b.replace('UP', ''), 10);
       return nb - na;
-    }),
-    [proposalRows]
-  );
+    });
+  }, [proposalRows, statusCol]);
 
   const filteredIds = useMemo(() =>
     idSearch.trim()
@@ -106,7 +122,7 @@ export const LeadPrioritizationPage: React.FC = () => {
     <div className="w-full space-y-6">
       <PageHeader
         title="Lead Prioritization"
-        subtitle="Score and categorize leads based on fixed checkpoints."
+        subtitle="Score leads that have reached Contacted, Interviewed, or Hired stage."
         actions={
           <div className="flex items-center gap-2">
             {isEditing && (
@@ -133,7 +149,7 @@ export const LeadPrioritizationPage: React.FC = () => {
               Select Lead Unique ID
             </label>
             <p className="text-xs text-slate-400 mb-3">
-              You can only analyse leads that exist in Proposal Details.
+              Only leads at <strong>Contacted</strong>, <strong>Interviewed</strong>, or <strong>Hired</strong> stage can be scored. Change the lead status in Proposal Details first.
             </p>
 
             {/* Searchable dropdown */}
@@ -168,7 +184,7 @@ export const LeadPrioritizationPage: React.FC = () => {
                   </div>
                   <div className="max-h-48 overflow-y-auto py-1">
                     {filteredIds.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4">No IDs found</p>
+                      <p className="text-xs text-slate-400 text-center py-4 px-3">No qualifying leads found.<br/>Change a lead status to Contacted in Proposal Details first.</p>
                     ) : filteredIds.map(id => {
                       const hasRecord = !!getByUniqueId(id);
                       return (
@@ -219,8 +235,8 @@ export const LeadPrioritizationPage: React.FC = () => {
             </div>
           ) : (
             <div className="bg-slate-50 rounded-2xl border border-slate-200 p-10 text-center">
-              <p className="text-sm font-medium text-slate-500">Select a lead from the dropdown above to start scoring</p>
-              <p className="text-xs text-slate-400 mt-1">Only leads from Proposal Details can be analysed</p>
+              <p className="text-sm font-medium text-slate-500">Select a lead to start scoring</p>
+              <p className="text-xs text-slate-400 mt-1">Only leads at Contacted/Interviewed/Hired stage appear here</p>
             </div>
           )}
         </div>
