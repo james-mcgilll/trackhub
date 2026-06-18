@@ -12,124 +12,21 @@ function detectStatusCol(cols: Column[]): Column | null {
   if (byName) return byName;
   return cols.find(c => {
     if (c.type !== 'dropdown' || !c.options) return false;
-    const labels = c.options.map(o => o.label.toLowerCase());
+    const labels = c.options.map((o: any) => o.label.toLowerCase());
     return LA_QUALIFYING_STAGES.filter(s => labels.includes(s)).length >= 2;
   }) ?? null;
 }
 
 export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) {
-  const [laColumns,   setLaColumns]   = useState<LAColumn[]>([]);
-  const [laRows,      setLaRows]      = useState<LARow[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [syncStatus,  setSyncStatus]  = useState('');
+  // ── All useState first ───────────────────────────────────────────────────
+  const [laColumns,  setLaColumns]  = useState<LAColumn[]>([]);
+  const [laRows,     setLaRows]     = useState<LARow[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [syncStatus, setSyncStatus] = useState('');
 
+  // ── All useMemo ─────────────────────────────────────────────────────────
   const statusCol = useMemo(() => detectStatusCol(proposalColumns), [proposalColumns]);
 
-  // ── Load LA columns and rows from Supabase ──────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: colData, error: colErr } = await supabase
-          .from('la_columns').select('*').order('order');
-        if (colErr?.code === '42P01') { console.warn('la_columns not created yet'); setLoading(false); return; }
-        if (!colErr && colData) {
-          // Map snake_case from Supabase to camelCase LAColumn
-          const mapped: LAColumn[] = colData.map((r: any) => ({
-            id:          r.id,
-            name:        r.name,
-            source:      r.source,
-            linkedColId: r.linked_col_id ?? undefined,
-            type:        r.type,
-            options:     r.options ?? null,
-            width:       r.width,
-            order:       r.order,
-          }));
-          setLaColumns(mapped);
-        } else if (colErr) console.warn('la_columns table not ready:', colErr.message);
-
-        const { data: rowData, error: rowErr } = await supabase
-          .from('la_rows').select('*').order('created_at');
-        if (rowErr?.code === '42P01') { console.warn('la_rows not created yet'); setLoading(false); return; }
-        if (!rowErr && rowData) {
-          // Map snake_case from Supabase to camelCase LARow
-          const mapped: LARow[] = rowData.map((r: any) => ({
-            uniqueId:  r.unique_id,
-            localData: r.local_data ?? {},
-            createdAt: r.created_at,
-          }));
-          setLaRows(mapped);
-        } else if (rowErr) console.warn('la_rows table not ready:', rowErr.message);
-      } catch (e) {
-        console.warn('LA load error — tables may not exist yet:', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  // ── Sync qualifying leads from proposal data ────────────────────────────────
-  const syncLeads = useCallback(async () => {
-    if (proposalRows.length === 0 || !statusCol) return;
-
-    setSyncStatus('Syncing...');
-
-    // Build option map from proposalColumns
-    const optionMap: Record<string, string> = {};
-    for (const opt of statusCol.options ?? []) {
-      optionMap[(opt as any).id] = (opt as any).label;
-      optionMap[(opt as any).label.toLowerCase()] = (opt as any).label;
-    }
-
-    // Find qualifying IDs
-    const qualifyingIds: string[] = [];
-    for (const row of proposalRows) {
-      const val = row.data[statusCol.id] ?? '';
-      if (!val) continue;
-      const label = optionMap[val] ?? optionMap[val.toLowerCase()] ?? val;
-      if (LA_QUALIFYING_STAGES.includes(label.toLowerCase()) && row.display_id) {
-        qualifyingIds.push(row.display_id);
-      }
-    }
-
-    if (qualifyingIds.length === 0) { setSyncStatus(''); return; }
-
-    // Get existing LA rows from Supabase
-    const { data: existing } = await supabase.from('la_rows').select('unique_id, local_data, created_at');
-    const existingMap: Record<string, any> = {};
-    for (const r of existing ?? []) existingMap[r.unique_id] = r;
-
-    // Add missing qualifying rows to Supabase
-    const toAdd = qualifyingIds
-      .filter(id => !existingMap[id])
-      .map(id => ({ unique_id: id, local_data: {}, created_at: new Date().toISOString() }));
-
-    if (toAdd.length > 0) {
-      await supabase.from('la_rows').insert(toAdd);
-    }
-
-    // Build full list
-    const allLaRows: LARow[] = qualifyingIds.map(id =>
-      existingMap[id]
-        ? { uniqueId: id, localData: existingMap[id].local_data ?? {}, createdAt: existingMap[id].created_at }
-        : { uniqueId: id, localData: {}, createdAt: new Date().toISOString() }
-    ).sort((a, b) => {
-      const na = parseInt(a.uniqueId.replace('UP', ''), 10);
-      const nb = parseInt(b.uniqueId.replace('UP', ''), 10);
-      return nb - na;
-    });
-
-    setLaRows(allLaRows);
-    setSyncStatus(`${qualifyingIds.length} leads`);
-    setTimeout(() => setSyncStatus(''), 2000);
-  }, [proposalRows, statusCol]);
-
-  // Run sync when proposal data is loaded
-  useEffect(() => {
-    if (proposalRows.length > 0 && statusCol) syncLeads();
-  }, [proposalRows.length, statusCol?.id]);
-
-  // ── Option label map ──────────────────────────────────────────────────────
   const optionLabelMap = useMemo(() => {
     const map: Record<string, Record<string, string>> = {};
     for (const col of proposalColumns) {
@@ -149,7 +46,6 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     return map;
   }, [proposalRows]);
 
-  // ── Merged rows ────────────────────────────────────────────────────────────
   const mergedRows = useMemo(() => {
     return laRows.map(laRow => {
       const proposalRow = proposalRowByUniqueId[laRow.uniqueId];
@@ -164,38 +60,72 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
         }
       }
       const currentStatus = proposalRow && statusCol
-        ? (statusCol.options?.find((o: any) => o.id === proposalRow.data[statusCol.id])?.label ?? '')
+        ? ((statusCol.options as any[])?.find((o: any) => o.id === proposalRow.data[statusCol.id])?.label ?? '')
         : '';
       return { uniqueId: laRow.uniqueId, data: merged, currentStatus };
     });
   }, [laRows, laColumns, proposalRowByUniqueId, statusCol, optionLabelMap]);
 
-  // ── Column operations — saved to Supabase ──────────────────────────────────
-  // Convert LAColumn camelCase to Supabase snake_case for storage
-  const toDb = (col: LAColumn) => ({
-    id:             col.id,
-    name:           col.name,
-    source:         col.source,
-    linked_col_id:  col.linkedColId ?? null,
-    type:           col.type,
-    options:        col.options ?? null,
-    width:          col.width,
-    order:          col.order,
-  });
+  // ── All useCallback ─────────────────────────────────────────────────────
+  const toDb = useCallback((col: LAColumn) => ({
+    id: col.id, name: col.name, source: col.source,
+    linked_col_id: col.linkedColId ?? null, type: col.type,
+    options: col.options ?? null, width: col.width, order: col.order,
+  }), []);
+
+  const syncLeads = useCallback(async () => {
+    if (proposalRows.length === 0 || !statusCol) return;
+    setSyncStatus('Syncing...');
+    try {
+      const optionMap: Record<string, string> = {};
+      for (const opt of (statusCol.options ?? []) as any[]) {
+        optionMap[opt.id] = opt.label;
+        optionMap[opt.label.toLowerCase()] = opt.label;
+      }
+      const qualifyingIds: string[] = [];
+      for (const row of proposalRows) {
+        const val = row.data[statusCol.id] ?? '';
+        if (!val) continue;
+        const label = optionMap[val] ?? optionMap[val.toLowerCase()] ?? val;
+        if (LA_QUALIFYING_STAGES.includes(label.toLowerCase()) && row.display_id) {
+          qualifyingIds.push(row.display_id);
+        }
+      }
+      if (qualifyingIds.length === 0) { setSyncStatus(''); return; }
+
+      const { data: existing } = await supabase.from('la_rows').select('unique_id, local_data, created_at');
+      const existingMap: Record<string, any> = {};
+      for (const r of existing ?? []) existingMap[r.unique_id] = r;
+
+      const toAdd = qualifyingIds.filter(id => !existingMap[id])
+        .map(id => ({ unique_id: id, local_data: {}, created_at: new Date().toISOString() }));
+      if (toAdd.length > 0) await supabase.from('la_rows').insert(toAdd);
+
+      const allLaRows: LARow[] = qualifyingIds.map(id =>
+        existingMap[id]
+          ? { uniqueId: id, localData: existingMap[id].local_data ?? {}, createdAt: existingMap[id].created_at }
+          : { uniqueId: id, localData: {}, createdAt: new Date().toISOString() }
+      ).sort((a, b) => parseInt(b.uniqueId.replace('UP',''),10) - parseInt(a.uniqueId.replace('UP',''),10));
+
+      setLaRows(allLaRows);
+      setSyncStatus(`${qualifyingIds.length} leads`);
+      setTimeout(() => setSyncStatus(''), 2000);
+    } catch (e) { console.warn('syncLeads error:', e); setSyncStatus(''); }
+  }, [proposalRows, statusCol]);
 
   const addLinkedColumn = useCallback((name: string, linkedColId: string, type: LAColumn['type']) => {
     const maxOrder = laColumns.length > 0 ? Math.max(...laColumns.map(c => c.order)) : -1;
     const newCol: LAColumn = { id: uid('lac'), name, source: 'linked', linkedColId, type, options: null, width: 180, order: maxOrder + 1 };
     setLaColumns(prev => [...prev, newCol].sort((a, b) => a.order - b.order));
     bg(supabase.from('la_columns').insert(toDb(newCol)));
-  }, [laColumns]);
+  }, [laColumns, toDb]);
 
   const addLocalColumn = useCallback((name: string, type: LAColumn['type'], options: {label:string;color:string}[] = []) => {
     const maxOrder = laColumns.length > 0 ? Math.max(...laColumns.map(c => c.order)) : -1;
     const newCol: LAColumn = { id: uid('lac'), name, source: 'local', type, options: type === 'dropdown' ? options.map(o => ({ id: uid('opt'), ...o })) : null, width: 180, order: maxOrder + 1 };
     setLaColumns(prev => [...prev, newCol].sort((a, b) => a.order - b.order));
     bg(supabase.from('la_columns').insert(toDb(newCol)));
-  }, [laColumns]);
+  }, [laColumns, toDb]);
 
   const deleteColumn = useCallback((colId: string) => {
     setLaColumns(prev => prev.filter(c => c.id !== colId));
@@ -209,9 +139,8 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
   }, []);
 
   const resizeColumn = useCallback((colId: string, width: number) => {
-    const w = Math.max(80, width);
-    setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, width: w } : c));
-    bg(supabase.from('la_columns').update({ width: w }).eq('id', colId));
+    setLaColumns(prev => prev.map(c => c.id === colId ? { ...c, width: Math.max(80, width) } : c));
+    bg(supabase.from('la_columns').update({ width: Math.max(80, width) }).eq('id', colId));
   }, []);
 
   const updateColumnOptions = useCallback((colId: string, options: LAColumn['options']) => {
@@ -236,7 +165,6 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     });
   }, []);
 
-  // ── Cell update — saved to Supabase ────────────────────────────────────────
   const updateCell = useCallback((uniqueId: string, colId: string, value: string) => {
     setLaRows(prev => prev.map(r => {
       if (r.uniqueId !== uniqueId) return r;
@@ -246,9 +174,7 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     }));
   }, []);
 
-  // ── Bulk import: only updates local columns, never touches linked columns ──
   const importLocalData = useCallback((updates: { uniqueId: string; colId: string; value: string }[]) => {
-    // Group updates by uniqueId
     const byId: Record<string, Record<string, string>> = {};
     for (const u of updates) {
       if (!byId[u.uniqueId]) byId[u.uniqueId] = {};
@@ -262,6 +188,37 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
       return { ...r, localData: newLocalData };
     }));
   }, []);
+
+  // ── All useEffect last ──────────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const { data: colData, error: colErr } = await supabase.from('la_columns').select('*').order('order');
+        if (colErr?.code === '42P01') { setLoading(false); return; }
+        if (!colErr && colData) {
+          setLaColumns(colData.map((r: any) => ({
+            id: r.id, name: r.name, source: r.source,
+            linkedColId: r.linked_col_id ?? undefined,
+            type: r.type, options: r.options ?? null,
+            width: r.width, order: r.order,
+          })));
+        }
+        const { data: rowData, error: rowErr } = await supabase.from('la_rows').select('*').order('created_at');
+        if (rowErr?.code === '42P01') { setLoading(false); return; }
+        if (!rowErr && rowData) {
+          setLaRows(rowData.map((r: any) => ({
+            uniqueId: r.unique_id, localData: r.local_data ?? {}, createdAt: r.created_at,
+          })));
+        }
+      } catch (e) { console.warn('LA load error:', e); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (proposalRows.length > 0 && statusCol) syncLeads();
+  }, [proposalRows.length, statusCol?.id]); // eslint-disable-line
 
   return {
     laColumns: [...laColumns].sort((a, b) => a.order - b.order),
