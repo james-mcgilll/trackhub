@@ -22,6 +22,7 @@ interface ProposalTableProps {
   onMoveLeft: (colId: string) => void;
   onMoveRight: (colId: string) => void;
   onUpdateColumnOptions: (colId: string, opts: Column['options']) => void;
+  getRowClass?: (row: Row) => string;
 }
 
 const ROW_H   = 40;
@@ -32,7 +33,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
   columns, rows, searchHighlight = '', hideId = false, hideActions = false,
   onUpdateCell, onDuplicateRow, onDeleteRow,
   onRenameColumn, onChangeColumnType, onDeleteColumn, onDuplicateColumn,
-  onReorderColumns, onResizeColumn, onMoveLeft, onMoveRight, onUpdateColumnOptions,
+  onReorderColumns, onResizeColumn, onMoveLeft, onMoveRight, onUpdateColumnOptions, getRowClass,
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -211,7 +212,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
               <tr key={row.id}
                   ref={el => { if (el && searchHighlight && (row.display_id?.toLowerCase().includes(searchHighlight.toLowerCase()) || Object.values(row.data).some(v => String(v).toLowerCase().includes(searchHighlight.toLowerCase())))) el.setAttribute('data-highlight-row','true'); }}
                   onClick={() => setSelectedRow(row.id === selectedRow ? null : row.id)}
-                  className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
+                  className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${getRowClass?.(row) ?? ''} ${
                     searchHighlight && (row.display_id?.toLowerCase().includes(searchHighlight.toLowerCase()) || Object.values(row.data).some(v => String(v).toLowerCase().includes(searchHighlight.toLowerCase())))
                       ? 'bg-amber-50 border-l-4 border-l-amber-400'
                       : selectedRow === row.id

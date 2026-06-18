@@ -56,7 +56,7 @@ export const TransactionsPage: React.FC = () => {
   const [importMsg,     setImportMsg]     = useState('');
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const [page,          setPage]          = useState(1);
-  const [dateRange,     setDateRange]     = useState<'1M'|'3M'|'1Y'|'All'>('All');
+  const [dateRange,     setDateRange]     = useState<'1M'|'3M'|'1Y'|'All'|'custom'>('All');
 
   const handleFiltersChange = (f: ActiveFilter[]) => { setActiveFilters(f); setPage(1); };
 
@@ -82,74 +82,110 @@ export const TransactionsPage: React.FC = () => {
   };
   const parseAmt = (v:string) => parseFloat(v.replace(/[^0-9.-]/g,'')) || 0;
 
-  const amountCol   = useMemo(() => columns.find(c => /amount|value|price|cost/i.test(c.name)), [columns]);
-  const typeCol     = useMemo(() => columns.find(c => /^type$/i.test(c.name) && c.type==='dropdown'), [columns]);
+  // Column detection — matches your actual column names
+  const amountCol   = useMemo(() => columns.find(c => /amount/i.test(c.name) && !/connect/i.test(c.name)), [columns]);
+  const typeCol     = useMemo(() => columns.find(c => /transaction\s*type|^type$/i.test(c.name)), [columns]);
   const dateCol     = useMemo(() => columns.find(c => c.type==='date' || /date/i.test(c.name)), [columns]);
-  const categoryCol = useMemo(() => columns.find(c => /categor/i.test(c.name) && c.id!==typeCol?.id), [columns, typeCol]);
+  const profileCol  = useMemo(() => columns.find(c => /profile|account/i.test(c.name)), [columns]);
+
+  // Date range filter: preset OR custom range
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo,   setCustomTo]   = useState('');
 
   const dateFilteredRows = useMemo(() => {
-    if (dateRange==='All' || !dateCol) return rows;
+    if (!dateCol) return rows;
+    if (dateRange === 'custom') {
+      if (!customFrom && !customTo) return rows;
+      return rows.filter(r => {
+        const d = normalizeDate(r.data[dateCol.id]??'');
+        if (customFrom && d < customFrom) return false;
+        if (customTo   && d > customTo)   return false;
+        return true;
+      });
+    }
+    if (dateRange==='All') return rows;
     const cutoff = new Date();
     if (dateRange==='1M') cutoff.setMonth(cutoff.getMonth()-1);
     if (dateRange==='3M') cutoff.setMonth(cutoff.getMonth()-3);
     if (dateRange==='1Y') cutoff.setFullYear(cutoff.getFullYear()-1);
     const cutStr = cutoff.toISOString().slice(0,10);
     return rows.filter(r => normalizeDate(r.data[dateCol.id]??'')>=cutStr);
-  }, [rows, dateCol, dateRange]);
+  }, [rows, dateCol, dateRange, customFrom, customTo]);
 
-  const filteredRows = useMemo(() => applyFilters(dateFilteredRows, activeFilters), [dateFilteredRows, activeFilters]);
+  // Profile filter
+  const [profileFilter, setProfileFilter] = useState('');
+  const profileOptions = useMemo(() => {
+    if (!profileCol) return [];
+    const vals = new Set<string>();
+    for (const row of rows) {
+      const v = resolveLabel(profileCol.id, row.data[profileCol.id]??'');
+      if (v) vals.add(v);
+    }
+    return Array.from(vals).sort();
+  }, [rows, profileCol, resolveLabel]);
+
+  const profileFilteredRows = useMemo(() => {
+    if (!profileFilter || !profileCol) return dateFilteredRows;
+    return dateFilteredRows.filter(r => {
+      const v = resolveLabel(profileCol.id, r.data[profileCol.id]??'');
+      return v === profileFilter;
+    });
+  }, [dateFilteredRows, profileFilter, profileCol, resolveLabel]);
+
+  const filteredRows = useMemo(() => applyFilters(profileFilteredRows, activeFilters), [profileFilteredRows, activeFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length/ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
   const pageRows   = filteredRows.slice((safePage-1)*ROWS_PER_PAGE, safePage*ROWS_PER_PAGE);
 
+  const isIncome = useCallback((row: Row) => {
+    if (!typeCol) return true;
+    const label = resolveLabel(typeCol.id, row.data[typeCol.id]??'').toLowerCase();
+    return /income|earn|revenue|credit|receipt|earning/.test(label);
+  }, [typeCol, resolveLabel]);
+
   const stats = useMemo(() => {
-    let income=0, expense=0;
+    let income=0, expense=0, incomeCount=0, expenseCount=0;
     for (const row of filteredRows) {
       if (!amountCol) continue;
-      const amt = parseAmt(row.data[amountCol.id]??'');
-      if (typeCol) {
-        const label = resolveLabel(typeCol.id, row.data[typeCol.id]??'').toLowerCase();
-        if (/income|earn|revenue|credit|receipt/.test(label)) income += Math.abs(amt);
-        else expense += Math.abs(amt);
-      } else {
-        if (amt>=0) income+=amt; else expense+=Math.abs(amt);
-      }
+      const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
+      if (isIncome(row)) { income+=amt; incomeCount++; }
+      else               { expense+=amt; expenseCount++; }
     }
-    return { income, expense, balance: income-expense };
-  }, [filteredRows, amountCol, typeCol, resolveLabel]);
+    const avgIncome  = incomeCount  > 0 ? income  / incomeCount  : 0;
+    const avgExpense = expenseCount > 0 ? expense / expenseCount : 0;
+    return { income, expense, balance: income-expense, incomeCount, expenseCount, avgIncome, avgExpense, total: filteredRows.length };
+  }, [filteredRows, amountCol, isIncome]);
 
   const chartData = useMemo(() => {
     if (!dateCol || !amountCol) return [];
     const by: Record<string,{income:number;expense:number}> = {};
-    for (const row of dateFilteredRows) {
+    for (const row of profileFilteredRows) {
       const d = normalizeDate(row.data[dateCol.id]??'');
       if (!d) continue;
       const mo = d.slice(0,7);
       if (!by[mo]) by[mo]={income:0,expense:0};
-      const amt = parseAmt(row.data[amountCol.id]??'');
-      if (typeCol) {
-        const label = resolveLabel(typeCol.id, row.data[typeCol.id]??'').toLowerCase();
-        if (/income|earn|revenue|credit/.test(label)) by[mo].income+=Math.abs(amt);
-        else by[mo].expense+=Math.abs(amt);
-      } else {
-        if (amt>=0) by[mo].income+=amt; else by[mo].expense+=Math.abs(amt);
-      }
+      const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
+      if (isIncome(row)) by[mo].income+=amt; else by[mo].expense+=amt;
     }
-    return Object.entries(by).sort(([a],[b])=>a.localeCompare(b)).slice(-12).map(([mo,v])=>({
+    return Object.entries(by).sort(([a],[b])=>a.localeCompare(b)).map(([mo,v])=>({
       label: new Date(mo+'-01').toLocaleDateString('en',{month:'short',year:'2-digit'}), ...v
     }));
-  }, [dateFilteredRows, dateCol, amountCol, typeCol, resolveLabel]);
+  }, [profileFilteredRows, dateCol, amountCol, isIncome]);
 
-  const catData = useMemo(() => {
-    if (!categoryCol || !amountCol) return [];
-    const by: Record<string,number> = {};
+  // Profile breakdown
+  const profileData = useMemo(() => {
+    if (!profileCol || !amountCol) return [];
+    const by: Record<string,{income:number;expense:number}> = {};
     for (const row of filteredRows) {
-      const cat = resolveLabel(categoryCol.id, row.data[categoryCol.id]??'')||'Other';
-      by[cat] = (by[cat]??0)+Math.abs(parseAmt(row.data[amountCol.id]??''));
+      const p = resolveLabel(profileCol.id, row.data[profileCol.id]??'')||'Unknown';
+      if (!by[p]) by[p]={income:0,expense:0};
+      const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
+      if (isIncome(row)) by[p].income+=amt; else by[p].expense+=amt;
     }
-    return Object.entries(by).sort(([,a],[,b])=>b-a).slice(0,8);
-  }, [filteredRows, categoryCol, amountCol, resolveLabel]);
+    return Object.entries(by).sort(([,a],[,b])=>(b.income+b.expense)-(a.income+a.expense)).slice(0,8);
+  }, [filteredRows, profileCol, amountCol, isIncome, resolveLabel]);
+
 
   const fmt = (n:number) => n.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 
@@ -200,26 +236,87 @@ export const TransactionsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Stats */}
-      {amountCol && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[
-            {label:'Total Income', val:stats.income, icon:<TrendingUp size={15}/>, cls:'bg-emerald-50 border-emerald-200 text-emerald-700'},
-            {label:'Total Expense',val:stats.expense,icon:<TrendingDown size={15}/>,cls:'bg-red-50 border-red-200 text-red-500'},
-            {label:'Net Balance',  val:stats.balance,icon:<DollarSign size={15}/>, cls:stats.balance>=0?'bg-blue-50 border-blue-200 text-blue-600':'bg-red-50 border-red-200 text-red-500'},
-          ].map(({label,val,icon,cls})=>(
-            <div key={label} className={`${cls} border rounded-2xl p-4`} style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-              <div className="flex items-center gap-1.5 mb-2 opacity-80">{icon}<span className="text-xs font-bold uppercase tracking-wide">{label}</span></div>
-              <p className="text-2xl font-bold" style={{fontFamily:"'Space Grotesk',sans-serif"}}>{fmt(val)}</p>
+      {/* ── Filter bar ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 p-4 flex flex-wrap items-end gap-3" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+        {/* Date preset */}
+        <div>
+          <p className="text-xs font-semibold text-slate-400 mb-1">Date range</p>
+          <div className="flex gap-1">
+            {(['1M','3M','1Y','All','custom'] as const).map(r=>(
+              <button key={r} onClick={()=>setDateRange(r)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${dateRange===r?'bg-blue-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {r==='custom'?'Custom':r}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Custom date inputs */}
+        {dateRange==='custom' && (
+          <div className="flex items-end gap-2">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 mb-1">From</p>
+              <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-blue-400"/>
             </div>
-          ))}
+            <div>
+              <p className="text-xs font-semibold text-slate-400 mb-1">To</p>
+              <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-blue-400"/>
+            </div>
+          </div>
+        )}
+        {/* Profile filter */}
+        {profileCol && profileOptions.length>0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-400 mb-1">{profileCol.name}</p>
+            <select value={profileFilter} onChange={e=>setProfileFilter(e.target.value)}
+              className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-blue-400 bg-white cursor-pointer min-w-36">
+              <option value="">All profiles</option>
+              {profileOptions.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        )}
+        {/* Column filters */}
+        {columns.length>0 && (
+          <div className="ml-auto">
+            <p className="text-xs font-semibold text-slate-400 mb-1">More filters</p>
+            <ColumnFilters columns={columns} activeFilters={activeFilters} onFiltersChange={handleFiltersChange} optionMap={optionMap}/>
+          </div>
+        )}
+      </div>
+
+      {/* ── Stats cards ── */}
+      {amountCol && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+            <div className="flex items-center gap-1.5 mb-1 text-emerald-600"><TrendingUp size={14}/><span className="text-xs font-bold uppercase tracking-wide">Total Income</span></div>
+            <p className="text-2xl font-bold text-emerald-700 leading-none" style={{fontFamily:"'Space Grotesk',sans-serif"}}>{fmt(stats.income)}</p>
+            <p className="text-xs text-emerald-500 mt-1">{stats.incomeCount} transactions · avg {fmt(stats.avgIncome)}</p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+            <div className="flex items-center gap-1.5 mb-1 text-red-500"><TrendingDown size={14}/><span className="text-xs font-bold uppercase tracking-wide">Total Expense</span></div>
+            <p className="text-2xl font-bold text-red-600 leading-none" style={{fontFamily:"'Space Grotesk',sans-serif"}}>{fmt(stats.expense)}</p>
+            <p className="text-xs text-red-400 mt-1">{stats.expenseCount} transactions · avg {fmt(stats.avgExpense)}</p>
+          </div>
+          <div className={`border rounded-2xl p-4 ${stats.balance>=0?'bg-blue-50 border-blue-200':'bg-red-50 border-red-200'}`} style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+            <div className={`flex items-center gap-1.5 mb-1 ${stats.balance>=0?'text-blue-600':'text-red-500'}`}><DollarSign size={14}/><span className="text-xs font-bold uppercase tracking-wide">Net Balance</span></div>
+            <p className={`text-2xl font-bold leading-none ${stats.balance>=0?'text-blue-700':'text-red-600'}`} style={{fontFamily:"'Space Grotesk',sans-serif"}}>{stats.balance>=0?'':'-'}{fmt(Math.abs(stats.balance))}</p>
+            <p className="text-xs text-slate-400 mt-1">{stats.total} total rows shown</p>
+          </div>
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+            <div className="flex items-center gap-1.5 mb-1 text-violet-600"><BarChart2 size={14}/><span className="text-xs font-bold uppercase tracking-wide">Savings Rate</span></div>
+            <p className="text-2xl font-bold text-violet-700 leading-none" style={{fontFamily:"'Space Grotesk',sans-serif"}}>
+              {stats.income>0?Math.round(((stats.income-stats.expense)/stats.income)*100):0}%
+            </p>
+            <p className="text-xs text-violet-400 mt-1">of income retained</p>
+          </div>
         </div>
       )}
 
-      {/* Chart */}
+      {/* ── Chart ── */}
       {chartData.length>0 && (
         <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-800" style={{fontFamily:"'Space Grotesk',sans-serif"}}>Monthly Overview</h3>
               <div className="flex items-center gap-3 mt-1">
@@ -227,39 +324,42 @@ export const TransactionsPage: React.FC = () => {
                 <span className="flex items-center gap-1 text-xs text-slate-500"><span className="w-3 h-2 bg-red-400 rounded-sm inline-block"/>Expense</span>
               </div>
             </div>
-            <div className="flex gap-1">
-              {(['1M','3M','1Y','All'] as const).map(r=>(
-                <button key={r} onClick={()=>setDateRange(r)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${dateRange===r?'bg-blue-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{r}</button>
-              ))}
-            </div>
           </div>
           <MiniBarChart data={chartData}/>
         </div>
       )}
 
-      {/* Category breakdown */}
-      {catData.length>0 && (
+      {/* ── Profile breakdown ── */}
+      {profileData.length>0 && (
         <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-          <h3 className="text-sm font-bold text-slate-800 mb-3" style={{fontFamily:"'Space Grotesk',sans-serif"}}>Top Categories</h3>
-          <div className="space-y-2">
-            {catData.map(([cat,amt],i)=>{
-              const pct=Math.round((amt/catData[0][1])*100);
-              const colors=['bg-blue-500','bg-violet-500','bg-emerald-500','bg-amber-500','bg-red-400','bg-cyan-500','bg-pink-500','bg-orange-500'];
-              return (
-                <div key={cat} className="flex items-center gap-3">
-                  <span className="text-xs text-slate-500 w-28 truncate flex-shrink-0">{cat}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-2"><div className={`${colors[i%colors.length]} h-2 rounded-full`} style={{width:`${pct}%`}}/></div>
-                  <span className="text-xs font-semibold text-slate-700 w-20 text-right tabular-nums">{fmt(amt)}</span>
+          <h3 className="text-sm font-bold text-slate-800 mb-4" style={{fontFamily:"'Space Grotesk',sans-serif"}}>By Profile / Account</h3>
+          <div className="space-y-3">
+            {profileData.map(([profile, vals])=>(
+              <div key={profile}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-slate-600 truncate">{profile}</span>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-emerald-600 font-medium">+{fmt(vals.income)}</span>
+                    <span className="text-red-500 font-medium">-{fmt(vals.expense)}</span>
+                    <span className={`font-bold ${vals.income-vals.expense>=0?'text-blue-600':'text-red-600'}`}>={fmt(vals.income-vals.expense)}</span>
+                  </div>
                 </div>
-              );
-            })}
+                <div className="flex gap-0.5 h-2 rounded-full overflow-hidden bg-slate-100">
+                  {vals.income>0 && <div className="bg-emerald-400 rounded-full" style={{width:`${Math.round(vals.income/(vals.income+vals.expense)*100)}%`}}/>}
+                  {vals.expense>0 && <div className="bg-red-400 rounded-full flex-1"/>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Filters */}
-      {columns.length>0 && (
-        <ColumnFilters columns={columns} activeFilters={activeFilters} onFiltersChange={handleFiltersChange} optionMap={optionMap}/>
+      {/* Row color legend */}
+      {typeCol && (
+        <div className="flex items-center gap-4 text-xs text-slate-500">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"/>Income rows</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-100 border border-red-300 inline-block"/>Expense rows</span>
+        </div>
       )}
 
       {/* Stats bar */}
@@ -298,6 +398,10 @@ export const TransactionsPage: React.FC = () => {
           onMoveLeft={moveLeft}
           onMoveRight={moveRight}
           onUpdateColumnOptions={updateColumnOptions}
+          getRowClass={(row) => {
+            if (!typeCol) return '';
+            return isIncome(row) ? 'bg-emerald-50/60' : 'bg-red-50/60';
+          }}
         />
       )}
 
