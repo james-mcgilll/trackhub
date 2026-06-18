@@ -46,7 +46,7 @@ export function useProposalTable() {
           const { data, error } = await supabase
             .from('proposal_rows')
             .select('*')
-            .order('created_at')
+            .order('created_at', { ascending: false })
             .range(from, from + PAGE - 1);
           if (error) throw new Error(error.message);
           if (!data || data.length === 0) break;
@@ -54,6 +54,12 @@ export function useProposalTable() {
           if (data.length < PAGE) break;
           from += PAGE;
         }
+        // Sort by display_id number descending (UP1852 before UP001)
+        allRows.sort((a, b) => {
+          const na = parseInt((a.display_id ?? '').replace(/\D/g, '') || '0', 10);
+          const nb = parseInt((b.display_id ?? '').replace(/\D/g, '') || '0', 10);
+          return nb - na;
+        });
         setRows(allRows);
         rowsRef.current = allRows;
       } catch (e: any) {

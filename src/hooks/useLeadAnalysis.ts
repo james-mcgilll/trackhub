@@ -30,15 +30,17 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     (async () => {
       setLoading(true);
       try {
-        const { data: colData } = await supabase
+        const { data: colData, error: colErr } = await supabase
           .from('la_columns').select('*').order('order');
-        if (colData) setLaColumns(colData as LAColumn[]);
+        if (!colErr && colData) setLaColumns(colData as LAColumn[]);
+        else if (colErr) console.warn('la_columns table not ready:', colErr.message);
 
-        const { data: rowData } = await supabase
+        const { data: rowData, error: rowErr } = await supabase
           .from('la_rows').select('*').order('created_at');
-        if (rowData) setLaRows(rowData as LARow[]);
+        if (!rowErr && rowData) setLaRows(rowData as LARow[]);
+        else if (rowErr) console.warn('la_rows table not ready:', rowErr.message);
       } catch (e) {
-        console.warn('LA load error:', e);
+        console.warn('LA load error — tables may not exist yet:', e);
       } finally {
         setLoading(false);
       }
