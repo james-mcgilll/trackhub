@@ -8,6 +8,7 @@ interface ImportModalProps {
   existingRows: Row[];
   onImport: (rows: Omit<Row, 'id' | 'created_at'>[], mode: 'skip' | 'overwrite') => void;
   onClose: () => void;
+  hideId?: boolean; // When true, no Unique ID column is shown or auto-generated
 }
 
 type Step = 'upload' | 'map' | 'preview';
@@ -52,7 +53,7 @@ function parseCSV(text: string): { headers: string[]; rows: ParsedRow[] } {
   return { headers, rows };
 }
 
-export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows, onImport, onClose }) => {
+export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows, onImport, onClose, hideId = false }) => {
   const [step, setStep]               = useState<Step>('upload');
   const [csvHeaders, setCsvHeaders]   = useState<string[]>([]);
   const [csvRows, setCsvRows]         = useState<ParsedRow[]>([]);
@@ -308,7 +309,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
                         className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white cursor-pointer"
                       >
                         <option value="">— Skip this column</option>
-                        <option value="__unique_id__">🔑 Unique ID (display_id)</option>
+                        {!hideId && <option value="__unique_id__">🔑 Unique ID (display_id)</option>}
                         {columns.map(col => (
                           <option key={col.id} value={col.id}>{col.name}</option>
                         ))}
@@ -337,7 +338,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">ID</th>
+                        {!hideId && <th className="px-3 py-2 text-left font-semibold text-slate-500">ID</th>}
                         {Object.entries(mapping).filter(([,v]) => v).map(([h, colId]) => {
                           const col = columns.find(c => c.id === colId);
                           return <th key={h} className="px-3 py-2 text-left font-semibold text-slate-500">{col?.name}</th>;

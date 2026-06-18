@@ -322,7 +322,7 @@ export const TransactionsPage: React.FC = () => {
       )}
 
       {showImport && (
-        <ImportModal columns={columns} existingRows={rows}
+        <ImportModal columns={columns} existingRows={rows} hideId={true}
           onImport={async(newRows,mode)=>{
             setShowImport(false); setImporting(true);
             setImportMsg(`Saving ${newRows.length} rows...`);
