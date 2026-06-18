@@ -219,11 +219,11 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         : 'hover:bg-blue-50/30'
                   }`}
                   style={{ height: ROW_H }}>
-                <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>{!hideId && (
+                {!hideId && <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>
                   <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all" title={row.id}>
                     {row.display_id || `UP${String(ri + 1).padStart(3, '0')}`}
                   </span>
-                )}</td>
+                </td>}
 
                 {columns.map((col, ci) => (
                   <td key={col.id} className={`border-r border-slate-100 p-0 ${dragId === col.id ? 'opacity-30' : ''}`}
@@ -236,7 +236,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                   </td>
                 ))}
 
-{!hideActions && (                <td className="text-center" style={{ width: ACT_W }}>
+                {!hideActions && <td className="text-center" style={{ width: ACT_W }}>
                   <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
                     <button tabIndex={-1} onClick={() => onDuplicateRow(row.id)} title="Duplicate"
                       className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
@@ -256,7 +256,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       )}
                     </div>
                   </div>
-                </td>)}
+                </td>}
               </tr>
             ))}
           </tbody>
