@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Columns, Download, Info, RefreshCw, Upload } from 'lucide-react';
+import { ColumnFilters, applyFiltersLA } from '../components/ui/ColumnFilters';
+import type { ActiveFilter } from '../components/ui/ColumnFilters';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
@@ -26,10 +28,23 @@ export const LeadAnalysisPage: React.FC = () => {
   const [showImport,  setShowImport]  = useState(false);
   const [resyncing,  setResyncing]  = useState(false);
   const [page,       setPage]       = useState(1);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+  const handleFiltersChange = (f: ActiveFilter[]) => { setActiveFilters(f); setPage(1); };
 
 
   // All derived state as useMemo — no code between hooks
-  const filtered = React.useMemo(() => mergedRows, [mergedRows]);
+  const optionMap = React.useMemo(() => {
+    const map: Record<string, Record<string, string>> = {};
+    for (const col of laColumns) {
+      if (col.type === 'dropdown' && col.options) {
+        map[col.id] = {};
+        for (const opt of col.options as {id:string;label:string}[]) map[col.id][opt.id] = opt.label;
+      }
+    }
+    return map;
+  }, [laColumns]);
+
+  const filtered = React.useMemo(() => applyFiltersLA(mergedRows, activeFilters), [mergedRows, activeFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
@@ -139,6 +154,14 @@ export const LeadAnalysisPage: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Column Filters */}
+      <ColumnFilters
+        columns={laColumns as any}
+        activeFilters={activeFilters}
+        onFiltersChange={handleFiltersChange}
+        optionMap={optionMap}
+      />
 
       {/* Stats bar */}
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">

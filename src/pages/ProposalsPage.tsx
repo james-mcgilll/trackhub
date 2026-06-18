@@ -7,6 +7,8 @@ import { ImportModal } from '../components/proposals/ImportModal';
 import { FunnelCards } from '../components/proposals/FunnelCards';
 import { useProposals } from '../context/ProposalContext';
 import type { ColumnType, Row } from '../types/proposals';
+import { ColumnFilters, applyFilters } from '../components/ui/ColumnFilters';
+import type { ActiveFilter } from '../components/ui/ColumnFilters';
 
 const ROWS_PER_PAGE = 100;
 
@@ -24,6 +26,8 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
 
   const [page,        setPage]        = useState(1);
   const [funnelFilter, setFunnelFilter] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+  const handleFiltersChange = (filters: ActiveFilter[]) => { setActiveFilters(filters); setPage(1); };
 
   // When searchHighlight comes in from global search, pre-fill the search box
   React.useEffect(() => {
@@ -59,6 +63,20 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
     const i = columns.findIndex(c => c.id === colId);
     if (i < columns.length - 1) reorderColumns(colId, columns[i + 1].id, 'after');
   };
+
+  // Option label map for filter display
+  const optionMap = React.useMemo(() => {
+    const map: Record<string, Record<string, string>> = {};
+    for (const col of columns) {
+      if (col.type === 'dropdown' && col.options) {
+        map[col.id] = {};
+        for (const opt of col.options as {id:string;label:string}[]) {
+          map[col.id][opt.id] = opt.label;
+        }
+      }
+    }
+    return map;
+  }, [columns]);
 
   // Funnel stage order for cumulative filtering
   const FUNNEL_ORDER = ['submitted', 'viewed', 'contacted', 'interviewed', 'hired'];
@@ -105,8 +123,11 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
     return true;
   });
 
+  // Apply column filters on top of funnel/highlight filters
+  const colFilteredRows = applyFilters(filteredRows, activeFilters);
+
   // Pagination
-  const totalRows  = filteredRows.length;
+  const totalRows  = colFilteredRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
   const pageStart  = (safePage - 1) * ROWS_PER_PAGE;
@@ -227,6 +248,14 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
           {importMsg}
         </div>
       )}
+
+      {/* Column Filters */}
+      <ColumnFilters
+        columns={columns}
+        activeFilters={activeFilters}
+        onFiltersChange={handleFiltersChange}
+        optionMap={optionMap}
+      />
 
       {/* Stats + pagination info */}
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
