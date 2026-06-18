@@ -220,12 +220,29 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     }));
   }, []);
 
+  // ── Bulk import: only updates local columns, never touches linked columns ──
+  const importLocalData = useCallback((updates: { uniqueId: string; colId: string; value: string }[]) => {
+    // Group updates by uniqueId
+    const byId: Record<string, Record<string, string>> = {};
+    for (const u of updates) {
+      if (!byId[u.uniqueId]) byId[u.uniqueId] = {};
+      byId[u.uniqueId][u.colId] = u.value;
+    }
+    setLaRows(prev => prev.map(r => {
+      const colUpdates = byId[r.uniqueId];
+      if (!colUpdates) return r;
+      const newLocalData = { ...r.localData, ...colUpdates };
+      bg(supabase.from('la_rows').update({ local_data: newLocalData }).eq('unique_id', r.uniqueId));
+      return { ...r, localData: newLocalData };
+    }));
+  }, []);
+
   return {
     laColumns: [...laColumns].sort((a, b) => a.order - b.order),
     mergedRows, laRows, loading, syncStatus, statusCol,
     proposalColumns, forceResync: syncLeads,
     addLinkedColumn, addLocalColumn,
     deleteColumn, renameColumn, resizeColumn, reorderColumns,
-    updateColumnOptions, updateCell,
+    updateColumnOptions, updateCell, importLocalData,
   };
 }

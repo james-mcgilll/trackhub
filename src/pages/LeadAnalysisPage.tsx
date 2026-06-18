@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Columns, Download, Info, RefreshCw } from 'lucide-react';
+import { Columns, Download, Info, RefreshCw, Upload } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
+import { ImportLAModal } from '../components/leadAnalysis/ImportLAModal';
 import { useProposals } from '../context/ProposalContext';
 import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 import { getFunnelStatusStyle } from '../types/proposals';
@@ -17,10 +18,11 @@ export const LeadAnalysisPage: React.FC = () => {
     laColumns, mergedRows, statusCol, loading, syncStatus,
     addLinkedColumn, addLocalColumn, forceResync,
     deleteColumn, renameColumn, resizeColumn, reorderColumns,
-    updateColumnOptions, updateCell,
+    updateColumnOptions, updateCell, importLocalData,
   } = useLeadAnalysis(proposalColumns, proposalRows);
 
-  const [showAddCol, setShowAddCol] = useState(false);
+  const [showAddCol,  setShowAddCol]  = useState(false);
+  const [showImport,  setShowImport]  = useState(false);
   const [resyncing,  setResyncing]  = useState(false);
   const [page,       setPage]       = useState(1);
 
@@ -73,6 +75,11 @@ export const LeadAnalysisPage: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
               style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <Download size={14} /><span className="hidden sm:inline">Export</span>
+            </button>
+            <button onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <Upload size={14} /><span className="hidden sm:inline">Import</span>
             </button>
             <button onClick={() => setShowAddCol(true)}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200">
@@ -159,6 +166,15 @@ export const LeadAnalysisPage: React.FC = () => {
             Next →
           </button>
         </div>
+      )}
+
+      {showImport && (
+        <ImportLAModal
+          laColumns={laColumns}
+          existingUniqueIds={mergedRows.map(r => r.uniqueId)}
+          onImport={importLocalData}
+          onClose={() => setShowImport(false)}
+        />
       )}
 
       {showAddCol && (
