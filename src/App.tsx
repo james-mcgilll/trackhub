@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from './components/layout/Layout';
 import { ProposalProvider } from './context/ProposalContext';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProposalsPage } from './pages/ProposalsPage';
 import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
@@ -81,10 +82,10 @@ function App() {
       case 'proposals':           return <ProposalsPage searchHighlight={searchHighlight} onClearHighlight={() => setSearchHighlight('')} />;
       case 'reporting':           return <ReportingPage />;
       case 'smart-analysis':      return <SmartAnalysisPage />;
-      case 'lead-analysis':       return <LeadAnalysisPage />;
+      case 'lead-analysis':       return <ErrorBoundary><LeadAnalysisPage /></ErrorBoundary>;
       case 'job-analysis':        return <JobAnalysisPage />;
       case 'proposal-creation':   return <ProposalCreationPage />;
-      case 'lead-prioritization': return <LeadPrioritizationPage />;
+      case 'lead-prioritization': return <ErrorBoundary><LeadPrioritizationPage /></ErrorBoundary>;
       case 'transactions':        return <TransactionsPage />;
       case 'notes':               return <NotesPage />;
       default:                    return <DashboardPage />;
