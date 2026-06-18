@@ -347,6 +347,7 @@ export const TransactionsPage: React.FC = () => {
           onDuplicateColumn={(_id: string) => {}}
           searchHighlight=""
           hideId={true}
+          hideActions={true}
         />
       )}
 

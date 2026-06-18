@@ -9,6 +9,7 @@ interface ProposalTableProps {
   rows: Row[];
   searchHighlight?: string;
   hideId?: boolean;
+  hideActions?: boolean;
   onUpdateCell: (rowId: string, colId: string, value: string) => void;
   onDuplicateRow: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
@@ -28,7 +29,7 @@ const ID_W    = 88;
 const ACT_W   = 72;
 
 export const ProposalTable: React.FC<ProposalTableProps> = ({
-  columns, rows, searchHighlight = '', hideId = false,
+  columns, rows, searchHighlight = '', hideId = false, hideActions = false,
   onUpdateCell, onDuplicateRow, onDeleteRow,
   onRenameColumn, onChangeColumnType, onDeleteColumn, onDuplicateColumn,
   onReorderColumns, onResizeColumn, onMoveLeft, onMoveRight, onUpdateColumnOptions,
@@ -133,11 +134,11 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     <>
       <div ref={tableRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white w-full"
         style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        <table className="border-collapse w-full" style={{ tableLayout: 'fixed', minWidth: columns.reduce((sum, col) => sum + col.width, (hideId ? 0 : ID_W) + ACT_W) }}>
+        <table className="border-collapse w-full" style={{ tableLayout: 'fixed', minWidth: columns.reduce((sum, col) => sum + col.width, (hideId ? 0 : ID_W) + (hideActions ? 0 : ACT_W)) }}>
           <colgroup>
             {!hideId && <col style={{ width: ID_W, minWidth: ID_W }} />}
             {columns.map(c => <col key={c.id} style={{ width: c.width, minWidth: c.width }} />)}
-            <col style={{ width: ACT_W, minWidth: ACT_W }} />
+            {!hideActions && <col style={{ width: ACT_W, minWidth: ACT_W }} />}
           </colgroup>
 
           <thead>
@@ -235,7 +236,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                   </td>
                 ))}
 
-                <td className="text-center" style={{ width: ACT_W }}>
+{!hideActions && (                <td className="text-center" style={{ width: ACT_W }}>
                   <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
                     <button tabIndex={-1} onClick={() => onDuplicateRow(row.id)} title="Duplicate"
                       className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
@@ -255,7 +256,7 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                       )}
                     </div>
                   </div>
-                </td>
+                </td>)}
               </tr>
             ))}
           </tbody>
