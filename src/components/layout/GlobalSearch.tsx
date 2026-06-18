@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, X, FileText, BarChart2, Star, TrendingUp, StickyNote, Briefcase } from 'lucide-react';
 import { useProposals } from '../../context/ProposalContext';
-import { useLeadPriority } from '../../hooks/useLeadPriority';
 import { getFunnelStatusStyle } from '../../types/proposals';
 import type { PageId } from '../../App';
 
@@ -52,8 +51,7 @@ function Highlight({ text, q }: { text: string; q: string }) {
 }
 
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
-  const { columns, rows } = useProposals();
-  const { records: priorityRecords } = useLeadPriority();
+  const { columns, rows, priorityRecords } = useProposals();
 
   const [query,   setQuery]   = useState('');
   const [open,    setOpen]    = useState(false);

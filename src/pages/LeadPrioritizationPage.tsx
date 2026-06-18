@@ -5,7 +5,6 @@ import { CriteriaChecklist } from '../components/leadPriority/CriteriaChecklist'
 import { ScoreDisplay } from '../components/leadPriority/ScoreDisplay';
 import { SavedRecords } from '../components/leadPriority/SavedRecords';
 import { TierBadge } from '../components/leadPriority/TierBadge';
-import { useLeadPriority } from '../hooks/useLeadPriority';
 import { useProposals } from '../context/ProposalContext';
 import { calcScore, getTier, CRITERIA } from '../types/leadPriority';
 import type { LeadPriorityRecord } from '../types/leadPriority';
@@ -13,7 +12,7 @@ import type { LeadPriorityRecord } from '../types/leadPriority';
 const LA_QUALIFYING = ['contacted', 'interviewed', 'hired'];
 
 export const LeadPrioritizationPage: React.FC = () => {
-  const { records, loading, saveRecord, deleteRecord, getByUniqueId } = useLeadPriority();
+  const { priorityRecords: records, priorityLoading: loading, savePriorityRecord: saveRecord, deletePriorityRecord: deleteRecord, getPriorityByUniqueId: getByUniqueId } = useProposals();
   const { columns: proposalColumns, rows: proposalRows } = useProposals();
 
   const [uniqueId,      setUniqueId]      = useState('');

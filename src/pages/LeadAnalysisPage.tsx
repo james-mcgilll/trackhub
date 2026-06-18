@@ -5,7 +5,6 @@ import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
 import { ImportLAModal } from '../components/leadAnalysis/ImportLAModal';
 import { useProposals } from '../context/ProposalContext';
-import { useLeadPriority } from '../hooks/useLeadPriority';
 import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 import { getFunnelStatusStyle } from '../types/proposals';
 
@@ -14,7 +13,7 @@ const FUNNEL_ORDER = ['Contacted', 'Interviewed', 'Hired'];
 
 export const LeadAnalysisPage: React.FC = () => {
   const { columns: proposalColumns, rows: proposalRows, loading: proposalLoading } = useProposals();
-  const { records: priorityRecords } = useLeadPriority();
+  const { priorityRecords } = useProposals();
 
   const {
     laColumns, mergedRows, statusCol, loading, syncStatus,

@@ -50,7 +50,7 @@ export function useLeadPriority() {
 
   // ── Realtime ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    const ch = supabase.channel('lp_rt')
+    const ch = supabase.channel(`lp_rt_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: TABLE },
         ({ eventType, new: n, old: o }) => {
           if (eventType === 'INSERT') {

@@ -1,6 +1,8 @@
 import React, { createContext, useContext } from 'react';
 import { useProposalTable } from '../hooks/useProposalTable';
+import { useLeadPriority } from '../hooks/useLeadPriority';
 import type { Column, Row, ColumnType } from '../types/proposals';
+import type { LeadPriorityRecord } from '../types/leadPriority';
 
 interface ProposalContextType {
   columns: Column[];
@@ -20,21 +22,36 @@ interface ProposalContextType {
   resizeColumn: (colId: string, width: number) => void;
   reorderColumns: (sourceId: string, targetId: string, position: 'before' | 'after') => void;
   updateColumnOptions: (colId: string, options: any) => void;
+  // Lead Priority — shared so only one Supabase subscription exists
+  priorityRecords: LeadPriorityRecord[];
+  priorityLoading: boolean;
+  savePriorityRecord: (uniqueId: string, selectedCriteria: string[]) => Promise<LeadPriorityRecord>;
+  deletePriorityRecord: (id: string) => Promise<void>;
+  getPriorityByUniqueId: (uniqueId: string) => LeadPriorityRecord | null;
 }
 
 const ProposalContext = createContext<ProposalContextType | null>(null);
 
-// ── Single provider at the app root — data fetched ONCE, shared everywhere ──
 export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const data = useProposalTable();
+  const proposalData  = useProposalTable();
+  const priorityData  = useLeadPriority();
+
+  const value: ProposalContextType = {
+    ...proposalData,
+    priorityRecords:       priorityData.records,
+    priorityLoading:       priorityData.loading,
+    savePriorityRecord:    priorityData.saveRecord,
+    deletePriorityRecord:  priorityData.deleteRecord,
+    getPriorityByUniqueId: priorityData.getByUniqueId,
+  };
+
   return (
-    <ProposalContext.Provider value={data}>
+    <ProposalContext.Provider value={value}>
       {children}
     </ProposalContext.Provider>
   );
 };
 
-// ── All modules use this hook to access proposal data ──
 export function useProposals() {
   const ctx = useContext(ProposalContext);
   if (!ctx) throw new Error('useProposals must be used inside ProposalProvider');
