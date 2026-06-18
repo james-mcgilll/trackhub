@@ -8,9 +8,10 @@ import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
 import { LeadPrioritizationPage } from './pages/LeadPrioritizationPage';
 import { ReportingPage } from './pages/ReportingPage';
 import { NotesPage } from './pages/NotesPage';
+import { TransactionsPage } from './pages/TransactionsPage';
 import {
   SmartAnalysisPage, JobAnalysisPage,
-  ProposalCreationPage, TransactionsPage,
+  ProposalCreationPage,
 } from './pages/PlaceholderPages';
 
 export type PageId =
@@ -86,7 +87,7 @@ function App() {
       case 'job-analysis':        return <JobAnalysisPage />;
       case 'proposal-creation':   return <ProposalCreationPage />;
       case 'lead-prioritization': return <ErrorBoundary><LeadPrioritizationPage /></ErrorBoundary>;
-      case 'transactions':        return <TransactionsPage />;
+      case 'transactions':        return <ErrorBoundary><TransactionsPage /></ErrorBoundary>;
       case 'notes':               return <NotesPage />;
       default:                    return <DashboardPage />;
     }

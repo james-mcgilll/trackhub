@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, Briefcase, FilePlus, CreditCard } from 'lucide-react';
+import { Brain, Briefcase, FilePlus } from 'lucide-react';
 import { PlaceholderModule } from '../components/ui/PlaceholderModule';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -30,9 +30,3 @@ export const ProposalCreationPage: React.FC = () => (
 
 
 
-export const TransactionsPage: React.FC = () => (
-  <div>
-    <PageHeader title="Transactions" subtitle="Payments, invoices, and spending history" />
-    <PlaceholderModule moduleName="Transactions" description="Review all financial transactions, invoices, payments, and spending records." icon={CreditCard} />
-  </div>
-);
