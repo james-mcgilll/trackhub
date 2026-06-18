@@ -346,6 +346,7 @@ export const TransactionsPage: React.FC = () => {
           onMoveRight={(id: string) => { const i = columns.findIndex(c => c.id === id); if (i < columns.length-1) reorderColumns(id, columns[i+1].id, 'after'); }}
           onDuplicateColumn={(_id: string) => {}}
           searchHighlight=""
+          hideId={true}
         />
       )}
 

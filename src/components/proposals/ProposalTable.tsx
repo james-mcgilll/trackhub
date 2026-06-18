@@ -8,6 +8,7 @@ interface ProposalTableProps {
   columns: Column[];
   rows: Row[];
   searchHighlight?: string;
+  hideId?: boolean;
   onUpdateCell: (rowId: string, colId: string, value: string) => void;
   onDuplicateRow: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
@@ -27,7 +28,7 @@ const ID_W    = 88;
 const ACT_W   = 72;
 
 export const ProposalTable: React.FC<ProposalTableProps> = ({
-  columns, rows, searchHighlight = '',
+  columns, rows, searchHighlight = '', hideId = false,
   onUpdateCell, onDuplicateRow, onDeleteRow,
   onRenameColumn, onChangeColumnType, onDeleteColumn, onDuplicateColumn,
   onReorderColumns, onResizeColumn, onMoveLeft, onMoveRight, onUpdateColumnOptions,
@@ -132,18 +133,18 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
     <>
       <div ref={tableRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white w-full"
         style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        <table className="border-collapse w-full" style={{ tableLayout: 'fixed', minWidth: columns.reduce((sum, col) => sum + col.width, ID_W + ACT_W) }}>
+        <table className="border-collapse w-full" style={{ tableLayout: 'fixed', minWidth: columns.reduce((sum, col) => sum + col.width, (hideId ? 0 : ID_W) + ACT_W) }}>
           <colgroup>
-            <col style={{ width: ID_W, minWidth: ID_W }} />
+            {!hideId && <col style={{ width: ID_W, minWidth: ID_W }} />}
             {columns.map(c => <col key={c.id} style={{ width: c.width, minWidth: c.width }} />)}
             <col style={{ width: ACT_W, minWidth: ACT_W }} />
           </colgroup>
 
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="border-r border-slate-100 px-3 text-left" style={{ height: 40 }}>
+              {!hideId && <th className="border-r border-slate-100 px-3 text-left" style={{ height: 40 }}>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">ID</span>
-              </th>
+              </th>}
 
               {columns.map((col, _idx) => (
                 <th key={col.id}
@@ -217,11 +218,11 @@ export const ProposalTable: React.FC<ProposalTableProps> = ({
                         : 'hover:bg-blue-50/30'
                   }`}
                   style={{ height: ROW_H }}>
-                <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>
+                <td className="border-r border-slate-100 px-3" style={{ width: ID_W }}>{!hideId && (
                   <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md select-all" title={row.id}>
                     {row.display_id || `UP${String(ri + 1).padStart(3, '0')}`}
                   </span>
-                </td>
+                )}</td>
 
                 {columns.map((col, ci) => (
                   <td key={col.id} className={`border-r border-slate-100 p-0 ${dragId === col.id ? 'opacity-30' : ''}`}
