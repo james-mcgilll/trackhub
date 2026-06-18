@@ -33,10 +33,15 @@ export function useLeadPriority() {
           .from(TABLE)
           .select('*')
           .order('created_at', { ascending: false });
+        // Silently ignore if table doesn't exist yet
+        if (error && error.code === '42P01') {
+          console.warn('lead_priority_records table not created yet');
+          return;
+        }
         if (error) throw error;
         setRecords((data ?? []).map(fromDb));
       } catch (e) {
-        console.error('Failed to load priority records:', e);
+        console.warn('Lead priority load failed (non-critical):', e);
       } finally {
         setLoading(false);
       }

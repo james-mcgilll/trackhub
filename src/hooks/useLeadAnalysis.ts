@@ -32,6 +32,7 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
       try {
         const { data: colData, error: colErr } = await supabase
           .from('la_columns').select('*').order('order');
+        if (colErr?.code === '42P01') { console.warn('la_columns not created yet'); setLoading(false); return; }
         if (!colErr && colData) {
           // Map snake_case from Supabase to camelCase LAColumn
           const mapped: LAColumn[] = colData.map((r: any) => ({
@@ -49,6 +50,7 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
 
         const { data: rowData, error: rowErr } = await supabase
           .from('la_rows').select('*').order('created_at');
+        if (rowErr?.code === '42P01') { console.warn('la_rows not created yet'); setLoading(false); return; }
         if (!rowErr && rowData) {
           // Map snake_case from Supabase to camelCase LARow
           const mapped: LARow[] = rowData.map((r: any) => ({
