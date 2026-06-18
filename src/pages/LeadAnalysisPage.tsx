@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Columns, Search, Download, Info, RefreshCw } from 'lucide-react';
+import { Columns, Download, Info, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
@@ -22,18 +22,10 @@ export const LeadAnalysisPage: React.FC = () => {
 
   const [showAddCol, setShowAddCol] = useState(false);
   const [resyncing,  setResyncing]  = useState(false);
-  const [search,     setSearch]     = useState('');
   const [page,       setPage]       = useState(1);
 
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
 
-  const filtered = search.trim()
-    ? mergedRows.filter(r =>
-        r.uniqueId.toLowerCase().includes(search.toLowerCase()) ||
-        r.currentStatus.toLowerCase().includes(search.toLowerCase()) ||
-        Object.values(r.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()))
-      )
-    : mergedRows;
+  const filtered = mergedRows;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
@@ -69,12 +61,7 @@ export const LeadAnalysisPage: React.FC = () => {
         subtitle="Detailed analysis of Contacted, Interviewed, and Hired leads."
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-blue-300 transition-colors"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <Search size={14} className="text-slate-400" />
-              <input type="text" value={search} onChange={e => handleSearch(e.target.value)}
-                placeholder="Search..." className="text-sm text-slate-600 placeholder-slate-400 outline-none bg-transparent w-32" />
-            </div>
+
             <button
               onClick={() => { setResyncing(true); forceResync().finally(() => setResyncing(false)); }}
               className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
@@ -136,12 +123,10 @@ export const LeadAnalysisPage: React.FC = () => {
 
       {/* Stats bar */}
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
-        <span><strong className="text-slate-800 font-semibold">{filtered.length}</strong>
-          {search ? ` of ${mergedRows.length} leads` : ' leads'}
-        </span>
+        <span><strong className="text-slate-800 font-semibold">{filtered.length}</strong> leads</span>
         <span className="text-slate-300">|</span>
         <span><strong className="text-slate-800 font-semibold">{laColumns.length}</strong> columns</span>
-        {search && <button onClick={() => handleSearch('')} className="text-blue-600 text-xs font-medium">Clear</button>}
+
         <span className="ml-auto text-xs text-slate-400 hidden md:block">
           Right-click column header for options · 🔗 = linked from Proposal Details (read-only)
         </span>

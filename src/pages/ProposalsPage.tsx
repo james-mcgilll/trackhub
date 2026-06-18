@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Columns, Download, Search, Wifi, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Columns, Download, Wifi, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ProposalTable } from '../components/proposals/ProposalTable';
 import { AddColumnModal } from '../components/proposals/AddColumnModal';
@@ -20,7 +20,6 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
   const [showImport,  setShowImport]  = useState(false);
   const [importing,   setImporting]   = useState(false);
   const [importMsg,   setImportMsg]   = useState('');
-  const [search,      setSearch]      = useState('');
   const [highlighted, setHighlighted] = useState('');
 
   const [page,        setPage]        = useState(1);
@@ -29,7 +28,6 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
   // When searchHighlight comes in from global search, pre-fill the search box
   React.useEffect(() => {
     if (searchHighlight) {
-      setSearch(searchHighlight);
       setHighlighted(searchHighlight);
       setPage(1);
       setTimeout(() => {
@@ -86,11 +84,11 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
 
   // Filter rows by search + funnel
   const filteredRows = rows.filter(row => {
-    // Search filter
-    if (search.trim()) {
+    // Highlight filter (from global search)
+    if (highlighted.trim()) {
       const matchesSearch =
-        row.display_id?.toLowerCase().includes(search.toLowerCase()) ||
-        Object.values(row.data).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
+        row.display_id?.toLowerCase().includes(highlighted.toLowerCase()) ||
+        Object.values(row.data).some(v => String(v).toLowerCase().includes(highlighted.toLowerCase()));
       if (!matchesSearch) return false;
     }
     // Funnel filter — show rows at this stage OR ANY LATER STAGE
@@ -115,8 +113,6 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
   const pageEnd    = pageStart + ROWS_PER_PAGE;
   const pageRows   = filteredRows.slice(pageStart, pageEnd);
 
-  // Reset to page 1 when search changes
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); setFunnelFilter(null); };
 
   // Export
   const handleExport = () => {
@@ -178,13 +174,7 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
               <span className="text-xs font-medium text-emerald-600">Live sync</span>
             </div>
 
-            {/* Search */}
-            <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-blue-300 transition-colors"
-              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <Search size={14} className="text-slate-400" />
-              <input type="text" value={search} onChange={e => handleSearch(e.target.value)}
-                placeholder="Search..." className="text-sm text-slate-600 placeholder-slate-400 outline-none bg-transparent w-32" />
-            </div>
+
 
             {/* Export */}
             <button onClick={handleExport}
@@ -242,15 +232,11 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
         <span>
           <strong className="text-slate-800 font-semibold">{totalRows}</strong>
-          {search ? ` of ${rows.length} rows` : ' rows'}
+ rows
         </span>
         <span className="text-slate-300">|</span>
         <span><strong className="text-slate-800 font-semibold">{columns.length}</strong> columns</span>
-        {search && (
-          <button onClick={() => handleSearch('')} className="text-blue-600 text-xs font-medium">
-            Clear search
-          </button>
-        )}
+
         {totalPages > 1 && (
           <>
             <span className="text-slate-300">|</span>
