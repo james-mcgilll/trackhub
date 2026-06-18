@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, X, FileText, BarChart2, Star, TrendingUp } from 'lucide-react';
+import { Search, X, FileText, BarChart2, Star, TrendingUp, StickyNote, Briefcase } from 'lucide-react';
 import { useProposals } from '../../context/ProposalContext';
 import { useLeadPriority } from '../../hooks/useLeadPriority';
 import { getFunnelStatusStyle } from '../../types/proposals';
@@ -11,23 +11,33 @@ interface GlobalSearchProps {
 
 interface SearchResult {
   module: PageId;
-  moduleLabel: string;
-  moduleIcon: React.ReactNode;
   displayId: string;
   matchedField: string;
   matchedValue: string;
   statusLabel: string;
-  extra?: string; // e.g. tier for prioritization
+  extra?: string;
 }
 
-const MODULE_META: Partial<Record<PageId, { label: string; icon: React.ReactNode; color: string }>> = {
-  'proposals':           { label: 'Proposal Details',    icon: <FileText size={13} />,   color: 'text-blue-600'   },
-  'lead-analysis':       { label: 'Lead Analysis',       icon: <TrendingUp size={13} />, color: 'text-violet-600' },
-  'lead-prioritization': { label: 'Lead Prioritization', icon: <Star size={13} />,       color: 'text-amber-600'  },
-  'reporting':           { label: 'Reporting',           icon: <BarChart2 size={13} />,  color: 'text-emerald-600'},
-};
+// ── Module registry ──────────────────────────────────────────────────────────
+// To add a new module to search: just add an entry here.
+const MODULE_REGISTRY: {
+  id: PageId;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+  order: number;
+}[] = [
+  { id: 'proposals',           label: 'Proposal Details',    icon: <FileText size={13} />,   color: 'text-blue-600',    order: 0 },
+  { id: 'lead-analysis',       label: 'Lead Analysis',       icon: <TrendingUp size={13} />, color: 'text-violet-600',  order: 1 },
+  { id: 'lead-prioritization', label: 'Lead Prioritization', icon: <Star size={13} />,       color: 'text-amber-600',   order: 2 },
+  { id: 'reporting',           label: 'Reporting',           icon: <BarChart2 size={13} />,  color: 'text-emerald-600', order: 3 },
+  { id: 'notes',               label: 'Notes & To-Do',       icon: <StickyNote size={13} />, color: 'text-pink-600',    order: 4 },
+  { id: 'job-analysis',        label: 'Job Analysis',        icon: <Briefcase size={13} />,  color: 'text-cyan-600',    order: 5 },
+  // Add future modules here — no other code changes needed
+];
 
-const LA_STAGES = ['contacted', 'interviewed', 'hired'];
+const MODULE_META = Object.fromEntries(MODULE_REGISTRY.map(m => [m.id, m]));
+const LA_STAGES   = ['contacted', 'interviewed', 'hired'];
 
 function Highlight({ text, q }: { text: string; q: string }) {
   const idx = text.toLowerCase().indexOf(q.toLowerCase());
@@ -51,7 +61,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
   const inputRef     = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Option label map for resolving dropdown IDs
+  // Resolve dropdown IDs to labels
   const optionMap = useMemo(() => {
     const map: Record<string, Record<string, string>> = {};
     for (const col of columns) {
@@ -71,14 +81,13 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
     [columns]
   );
 
-  // Priority map: uniqueId -> { score, tier }
   const priorityMap = useMemo(() => {
     const m: Record<string, { score: number; tier: string }> = {};
     for (const r of priorityRecords) m[r.unique_id] = { score: r.score, tier: r.tier };
     return m;
   }, [priorityRecords]);
 
-  // ── Main search logic ──────────────────────────────────────────────────────
+  // ── Core search: match rows against query, determine all modules they appear in ──
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase();
     if (!q || q.length < 2) return [];
@@ -86,20 +95,28 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
     const found: SearchResult[] = [];
     const seen = new Set<string>();
 
+    const add = (module: PageId, displayId: string, matchedField: string, matchedValue: string, statusLabel: string, extra?: string) => {
+      const key = `${displayId}-${module}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      found.push({ module, displayId, matchedField, matchedValue, statusLabel, extra });
+    };
+
+    // ── Search all proposal rows ─────────────────────────────────────────────
     for (const row of rows) {
       let matchedField = '';
       let matchedValue = '';
 
-      // 1. Match display_id
+      // Match display_id
       if (row.display_id?.toLowerCase().includes(q)) {
         matchedField = 'Unique ID';
         matchedValue = row.display_id ?? '';
       }
 
-      // 2. Match column values
+      // Match any column value
       if (!matchedField) {
         for (const col of columns) {
-          const raw = row.data[col.id] ?? '';
+          const raw   = row.data[col.id] ?? '';
           const label = optionMap[col.id]?.[raw] ?? raw;
           if (label.toLowerCase().includes(q) || raw.toLowerCase().includes(q)) {
             matchedField = col.name;
@@ -111,72 +128,45 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
 
       if (!matchedField) continue;
 
-      // Get status label
-      const rawStatus = statusCol ? (row.data[statusCol.id] ?? '') : '';
-      const statusLabel = statusCol
-        ? (optionMap[statusCol.id]?.[rawStatus] ?? rawStatus)
-        : '';
-
+      const rawStatus   = statusCol ? (row.data[statusCol.id] ?? '') : '';
+      const statusLabel = statusCol ? (optionMap[statusCol.id]?.[rawStatus] ?? rawStatus) : '';
       const isQualifying = LA_STAGES.includes(statusLabel.toLowerCase());
-      const hasPriority  = !!priorityMap[row.display_id ?? ''];
+      const priority     = priorityMap[row.display_id ?? ''];
 
-      // ── Add to each module it appears in ──────────────────────────────────
+      // ── Add to every module this row is relevant to ──────────────────────
+      // 1. Always in Proposal Details
+      add('proposals', row.display_id ?? '', matchedField, matchedValue, statusLabel);
 
-      // Always in Proposal Details
-      const addResult = (module: PageId, extra?: string) => {
-        const key = `${row.id}-${module}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        found.push({
-          module,
-          moduleLabel: MODULE_META[module]?.label ?? module,
-          moduleIcon:  MODULE_META[module]?.icon,
-          displayId:   row.display_id ?? '',
-          matchedField,
-          matchedValue,
-          statusLabel,
-          extra,
-        });
-      };
-
-      addResult('proposals');
-
-      // Lead Analysis — only if Contacted/Interviewed/Hired
+      // 2. Lead Analysis — only qualifying stages
       if (isQualifying) {
-        addResult('lead-analysis');
+        add('lead-analysis', row.display_id ?? '', matchedField, matchedValue, statusLabel);
       }
 
-      // Lead Prioritization — only if qualifying AND has been scored
-      if (isQualifying && hasPriority) {
-        const p = priorityMap[row.display_id ?? ''];
-        addResult('lead-prioritization', `${p.tier} · Score: ${p.score > 0 ? '+' + p.score : p.score}`);
+      // 3. Lead Prioritization — only if scored
+      if (isQualifying && priority) {
+        const scoreStr = priority.score > 0 ? `+${priority.score}` : String(priority.score);
+        add('lead-prioritization', row.display_id ?? '', matchedField, matchedValue, statusLabel,
+          `${priority.tier} · ${scoreStr}`);
       }
 
-      if (found.length >= 50) break;
+      // 4. Future modules: add conditions here as new modules are built
+      // e.g. if (isJobAnalysisRow) add('job-analysis', ...)
+
+      if (found.length >= 60) break;
     }
 
-    // 3. Also search priority records directly by unique_id
-    // (catches cases where user searches a scored ID not yet in rows)
+    // ── Also search priority records directly by unique_id ──────────────────
     for (const rec of priorityRecords) {
       if (!rec.unique_id.toLowerCase().includes(q)) continue;
-      const key = `${rec.unique_id}-lead-prioritization`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      found.push({
-        module:      'lead-prioritization',
-        moduleLabel: MODULE_META['lead-prioritization']?.label ?? '',
-        moduleIcon:  MODULE_META['lead-prioritization']?.icon,
-        displayId:   rec.unique_id,
-        matchedField: 'Unique ID',
-        matchedValue: rec.unique_id,
-        statusLabel: '',
-        extra: `${rec.tier} · Score: ${rec.score > 0 ? '+' + rec.score : rec.score}`,
-      });
+      const scoreStr = rec.score > 0 ? `+${rec.score}` : String(rec.score);
+      add('lead-prioritization', rec.unique_id, 'Unique ID', rec.unique_id, '',
+        `${rec.tier} · ${scoreStr}`);
     }
 
-    // Sort: proposals first, then lead-analysis, then lead-prioritization
-    const order: Record<string, number> = { proposals: 0, 'lead-analysis': 1, 'lead-prioritization': 2, reporting: 3 };
-    return found.sort((a, b) => (order[a.module] ?? 9) - (order[b.module] ?? 9));
+    // Sort by module registry order
+    return found.sort((a, b) =>
+      (MODULE_META[a.module]?.order ?? 99) - (MODULE_META[b.module]?.order ?? 99)
+    );
   }, [query, rows, columns, optionMap, statusCol, priorityMap, priorityRecords]);
 
   // Group by module
@@ -198,7 +188,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  // Ctrl/Cmd+K
+  // Ctrl/Cmd+K shortcut
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); inputRef.current?.focus(); setOpen(true); }
@@ -245,7 +235,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
         <kbd className="hidden lg:block text-xs text-slate-300 border border-slate-200 rounded px-1.5 py-0.5 font-mono flex-shrink-0">⌘K</kbd>
       </div>
 
-      {/* Results dropdown */}
+      {/* Results */}
       {open && query.length >= 2 && (
         <div className="absolute top-full mt-2 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
           style={{ width: 480, maxHeight: 560, boxShadow: '0 16px 48px rgba(0,0,0,0.16)' }}>
@@ -255,8 +245,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
             <p className="text-xs font-semibold text-slate-500">
               {totalResults === 0
                 ? 'No results'
-                : `${totalResults} result${totalResults !== 1 ? 's' : ''} across ${moduleCount} module${moduleCount !== 1 ? 's' : ''}`
-              }
+                : `${totalResults} result${totalResults !== 1 ? 's' : ''} across ${moduleCount} module${moduleCount !== 1 ? 's' : ''}`}
             </p>
             <p className="text-xs text-slate-400">Esc to close</p>
           </div>
@@ -269,45 +258,35 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
                 <p className="text-xs text-slate-300">Try ID, name, title, link, or status</p>
               </div>
             ) : (
-              Object.entries(grouped).map(([mod, modResults]) => {
-                const meta = MODULE_META[mod as PageId];
+              // Render modules in registry order — only modules with results appear
+              MODULE_REGISTRY.filter(m => grouped[m.id]?.length > 0).map(meta => {
+                const modResults = grouped[meta.id] ?? [];
                 return (
-                  <div key={mod}>
+                  <div key={meta.id}>
                     {/* Module header */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border-b border-t border-slate-100 sticky top-0 z-10">
-                      <span className={meta?.color ?? 'text-slate-400'}>{meta?.icon}</span>
-                      <span className={`text-xs font-bold uppercase tracking-wide ${meta?.color ?? 'text-slate-600'}`}>
-                        {meta?.label}
-                      </span>
-                      <span className="ml-auto text-xs text-slate-400">
-                        {modResults.length} match{modResults.length !== 1 ? 'es' : ''}
-                      </span>
+                      <span className={meta.color}>{meta.icon}</span>
+                      <span className={`text-xs font-bold uppercase tracking-wide ${meta.color}`}>{meta.label}</span>
+                      <span className="ml-auto text-xs text-slate-400">{modResults.length} match{modResults.length !== 1 ? 'es' : ''}</span>
                     </div>
 
-                    {/* Results */}
                     {modResults.slice(0, 8).map((result, i) => {
                       const statusStyle = result.statusLabel ? getFunnelStatusStyle(result.statusLabel) : null;
                       return (
                         <button key={i}
                           onClick={() => handleClick(result)}
                           className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-0 text-left group">
-                          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                            <FileText size={13} className="text-blue-500" />
+                          <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center flex-shrink-0">
+                            <span className={meta.color}>{meta.icon}</span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
-                                {result.displayId}
-                              </span>
+                            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                              <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">{result.displayId}</span>
                               {statusStyle && result.statusLabel && (
-                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusStyle.full}`}>
-                                  {result.statusLabel}
-                                </span>
+                                <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusStyle.full}`}>{result.statusLabel}</span>
                               )}
                               {result.extra && (
-                                <span className="text-xs text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded">
-                                  {result.extra}
-                                </span>
+                                <span className="text-xs text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded">{result.extra}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5 text-xs min-w-0">
@@ -317,18 +296,15 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
                               </span>
                             </div>
                           </div>
-                          <span className="text-xs text-blue-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
-                            Open →
-                          </span>
+                          <span className="text-xs text-blue-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity font-medium">Open →</span>
                         </button>
                       );
                     })}
 
                     {modResults.length > 8 && (
-                      <button
-                        onClick={() => { onNavigate(mod as PageId, query.trim()); setOpen(false); setQuery(''); }}
+                      <button onClick={() => { onNavigate(meta.id, query.trim()); setOpen(false); setQuery(''); }}
                         className="w-full px-4 py-2 text-xs text-blue-600 hover:bg-blue-50 text-center font-medium">
-                        View all {modResults.length} in {meta?.label} →
+                        View all {modResults.length} in {meta.label} →
                       </button>
                     )}
                   </div>
@@ -337,11 +313,8 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-4 py-2 bg-slate-50 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center">
-              Click a result to open that module · <kbd className="border border-slate-200 rounded px-1 font-mono">↵</kbd> to go to first result
-            </p>
+            <p className="text-xs text-slate-400 text-center">Click a result to jump to that module</p>
           </div>
         </div>
       )}
