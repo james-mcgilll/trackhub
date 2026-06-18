@@ -37,8 +37,15 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
 
         const { data: rowData, error: rowErr } = await supabase
           .from('la_rows').select('*').order('created_at');
-        if (!rowErr && rowData) setLaRows(rowData as LARow[]);
-        else if (rowErr) console.warn('la_rows table not ready:', rowErr.message);
+        if (!rowErr && rowData) {
+          // Map snake_case from Supabase to camelCase LARow
+          const mapped: LARow[] = rowData.map((r: any) => ({
+            uniqueId:  r.unique_id,
+            localData: r.local_data ?? {},
+            createdAt: r.created_at,
+          }));
+          setLaRows(mapped);
+        } else if (rowErr) console.warn('la_rows table not ready:', rowErr.message);
       } catch (e) {
         console.warn('LA load error — tables may not exist yet:', e);
       } finally {
