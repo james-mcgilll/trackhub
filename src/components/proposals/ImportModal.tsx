@@ -348,9 +348,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ columns, existingRows,
                     <tbody className="divide-y divide-slate-100">
                       {buildPreviewRows().map((row, i) => (
                         <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 font-mono font-bold text-blue-500">
+                          {!hideId && <td className="px-3 py-2 font-mono font-bold text-blue-500">
                             UP{String(existingRows.length + i + 1).padStart(3, '0')}
-                          </td>
+                          </td>}
                           {Object.entries(mapping).filter(([,v]) => v).map(([h, colId]) => {
                             const col = columns.find(c => c.id === colId);
                             let display = row[colId] ?? '';
