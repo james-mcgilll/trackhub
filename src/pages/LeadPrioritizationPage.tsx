@@ -10,6 +10,8 @@ import { useProposals } from '../context/ProposalContext';
 import { calcScore, getTier, CRITERIA } from '../types/leadPriority';
 import type { LeadPriorityRecord } from '../types/leadPriority';
 
+const LA_QUALIFYING = ['contacted', 'interviewed', 'hired'];
+
 export const LeadPrioritizationPage: React.FC = () => {
   const { records, loading, saveRecord, deleteRecord, getByUniqueId } = useLeadPriority();
   const { columns: proposalColumns, rows: proposalRows } = useProposals();
@@ -21,9 +23,6 @@ export const LeadPrioritizationPage: React.FC = () => {
   const [existingWarn,  setExistingWarn]  = useState(false);
   const [showDropdown,  setShowDropdown]  = useState(false);
   const [idSearch,      setIdSearch]      = useState('');
-
-  // Only show IDs that are in Lead Analysis (Contacted/Interviewed/Hired)
-  const LA_QUALIFYING = ['contacted', 'interviewed', 'hired'];
 
   const statusCol = useMemo(() =>
     proposalColumns.find(c => c.type === 'dropdown' && c.name.toLowerCase().includes('status')),
@@ -55,8 +54,8 @@ export const LeadPrioritizationPage: React.FC = () => {
     [allUniqueIds, idSearch]
   );
 
-  const score = calcScore(selected);
-  const tier  = getTier(score);
+  const score = React.useMemo(() => calcScore(selected), [selected]);
+  const tier  = React.useMemo(() => getTier(score), [score]);
 
   // Check if uniqueId exists in Proposal Details
   const idExistsInSystem = useMemo(() =>

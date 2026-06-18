@@ -29,24 +29,26 @@ export const LeadAnalysisPage: React.FC = () => {
   const [page,       setPage]       = useState(1);
 
 
-  const filtered = mergedRows;
+  // All derived state as useMemo — no code between hooks
+  const filtered = React.useMemo(() => mergedRows, [mergedRows]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
   const pageRows   = filtered.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE);
 
-  // Cumulative funnel counts
-  const exactCounts: Record<string, number> = {};
-  for (const r of mergedRows) {
-    const s = r.currentStatus || '';
-    if (s) exactCounts[s] = (exactCounts[s] ?? 0) + 1;
-  }
-  const stageCounts: Record<string, number> = {};
-  FUNNEL_ORDER.forEach((stage, i) => {
-    stageCounts[stage] = FUNNEL_ORDER.slice(i).reduce((sum, s) => sum + (exactCounts[s] ?? 0), 0);
-  });
+  const stageCounts = React.useMemo(() => {
+    const exact: Record<string, number> = {};
+    for (const r of mergedRows) {
+      const s = r.currentStatus || '';
+      if (s) exact[s] = (exact[s] ?? 0) + 1;
+    }
+    const counts: Record<string, number> = {};
+    FUNNEL_ORDER.forEach((stage, i) => {
+      counts[stage] = FUNNEL_ORDER.slice(i).reduce((sum, s) => sum + (exact[s] ?? 0), 0);
+    });
+    return counts;
+  }, [mergedRows]);
 
-  // Map uniqueId -> priority record for Lead Category column
   const priorityByUniqueId = React.useMemo(() => {
     const map: Record<string, { score: number; tier: string }> = {};
     for (const r of priorityRecords) {
