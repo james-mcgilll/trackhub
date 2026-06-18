@@ -132,7 +132,7 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
   const safePage   = Math.min(page, totalPages);
   const pageStart  = (safePage - 1) * ROWS_PER_PAGE;
   const pageEnd    = pageStart + ROWS_PER_PAGE;
-  const pageRows   = filteredRows.slice(pageStart, pageEnd);
+  const pageRows   = colFilteredRows.slice(pageStart, pageEnd);
 
 
   // Export
