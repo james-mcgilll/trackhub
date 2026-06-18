@@ -5,6 +5,7 @@ import { LATable } from '../components/leadAnalysis/LATable';
 import { AddLAColumnModal } from '../components/leadAnalysis/AddLAColumnModal';
 import { ImportLAModal } from '../components/leadAnalysis/ImportLAModal';
 import { useProposals } from '../context/ProposalContext';
+import { useLeadPriority } from '../hooks/useLeadPriority';
 import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 import { getFunnelStatusStyle } from '../types/proposals';
 
@@ -13,6 +14,7 @@ const FUNNEL_ORDER = ['Contacted', 'Interviewed', 'Hired'];
 
 export const LeadAnalysisPage: React.FC = () => {
   const { columns: proposalColumns, rows: proposalRows, loading: proposalLoading } = useProposals();
+  const { records: priorityRecords } = useLeadPriority();
 
   const {
     laColumns, mergedRows, statusCol, loading, syncStatus,
@@ -43,6 +45,15 @@ export const LeadAnalysisPage: React.FC = () => {
   FUNNEL_ORDER.forEach((stage, i) => {
     stageCounts[stage] = FUNNEL_ORDER.slice(i).reduce((sum, s) => sum + (exactCounts[s] ?? 0), 0);
   });
+
+  // Map uniqueId -> priority record for Lead Category column
+  const priorityByUniqueId = React.useMemo(() => {
+    const map: Record<string, { score: number; tier: string }> = {};
+    for (const r of priorityRecords) {
+      map[r.unique_id] = { score: r.score, tier: r.tier };
+    }
+    return map;
+  }, [priorityRecords]);
 
   const handleExport = () => {
     const headers = ['Unique ID', 'Current Status', ...laColumns.map(c => c.name)].map(h => `"${h}"`).join(',');
@@ -143,6 +154,7 @@ export const LeadAnalysisPage: React.FC = () => {
       <LATable
         columns={laColumns}
         rows={pageRows}
+        priorityByUniqueId={priorityByUniqueId}
         onUpdateCell={updateCell}
         onDeleteColumn={deleteColumn}
         onRenameColumn={renameColumn}

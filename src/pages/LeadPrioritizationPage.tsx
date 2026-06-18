@@ -1,39 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { Save, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Save, RotateCcw, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { CriteriaChecklist } from '../components/leadPriority/CriteriaChecklist';
 import { ScoreDisplay } from '../components/leadPriority/ScoreDisplay';
 import { SavedRecords } from '../components/leadPriority/SavedRecords';
 import { TierBadge } from '../components/leadPriority/TierBadge';
 import { useLeadPriority } from '../hooks/useLeadPriority';
+import { useProposals } from '../context/ProposalContext';
 import { calcScore, getTier, CRITERIA } from '../types/leadPriority';
 import type { LeadPriorityRecord } from '../types/leadPriority';
 
 export const LeadPrioritizationPage: React.FC = () => {
   const { records, loading, saveRecord, deleteRecord, getByUniqueId } = useLeadPriority();
+  const { rows: proposalRows } = useProposals();
 
-  const [uniqueId, setUniqueId]         = useState('');
-  const [selected, setSelected]         = useState<string[]>([]);
-  const [editingId, setEditingId]       = useState<string | null>(null); // internal record id
-  const [saveStatus, setSaveStatus]     = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [existingWarning, setExisting]  = useState(false);
+  const [uniqueId,      setUniqueId]      = useState('');
+  const [selected,      setSelected]      = useState<string[]>([]);
+  const [editingId,     setEditingId]     = useState<string | null>(null);
+  const [saveStatus,    setSaveStatus]    = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [existingWarn,  setExistingWarn]  = useState(false);
+  const [showDropdown,  setShowDropdown]  = useState(false);
+  const [idSearch,      setIdSearch]      = useState('');
+
+  // All valid Unique IDs from Proposal Details
+  const allUniqueIds = useMemo(() =>
+    proposalRows.map(r => r.display_id ?? '').filter(Boolean).sort((a, b) => {
+      const na = parseInt(a.replace('UP', ''), 10);
+      const nb = parseInt(b.replace('UP', ''), 10);
+      return nb - na;
+    }),
+    [proposalRows]
+  );
+
+  const filteredIds = useMemo(() =>
+    idSearch.trim()
+      ? allUniqueIds.filter(id => id.toLowerCase().includes(idSearch.toLowerCase()))
+      : allUniqueIds.slice(0, 50),
+    [allUniqueIds, idSearch]
+  );
 
   const score = calcScore(selected);
   const tier  = getTier(score);
 
-  // When uniqueId changes, check if a record already exists
+  // Check if uniqueId exists in Proposal Details
+  const idExistsInSystem = useMemo(() =>
+    allUniqueIds.includes(uniqueId.trim().toUpperCase()),
+    [uniqueId, allUniqueIds]
+  );
+
+  // Check if a priority record already exists for this ID
   useEffect(() => {
-    if (!uniqueId.trim()) { setExisting(false); return; }
+    if (!uniqueId.trim()) { setExistingWarn(false); return; }
     const existing = getByUniqueId(uniqueId.trim().toUpperCase());
-    setExisting(!!existing && editingId !== existing.id);
+    setExistingWarn(!!existing && editingId !== existing.id);
   }, [uniqueId, records, editingId, getByUniqueId]);
 
   const handleReset = () => {
-    setSelected([]);
-    setUniqueId('');
-    setEditingId(null);
-    setSaveStatus('idle');
-    setExisting(false);
+    setSelected([]); setUniqueId(''); setEditingId(null);
+    setSaveStatus('idle'); setExistingWarn(false); setIdSearch('');
   };
 
   const handleEdit = (record: LeadPriorityRecord) => {
@@ -41,21 +65,20 @@ export const LeadPrioritizationPage: React.FC = () => {
     setSelected(record.selected_criteria);
     setEditingId(record.id);
     setSaveStatus('idle');
-    setExisting(false);
-    // Scroll to top
+    setExistingWarn(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSave = async () => {
     const uid = uniqueId.trim().toUpperCase();
-    if (!uid) return;
+    if (!uid || !idExistsInSystem) return;
     setSaveStatus('saving');
     try {
       await saveRecord(uid, selected);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2500);
       setEditingId(null);
-      setExisting(false);
+      setExistingWarn(false);
     } catch {
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -63,16 +86,24 @@ export const LeadPrioritizationPage: React.FC = () => {
   };
 
   const handleLoadExisting = () => {
-    const uid = uniqueId.trim().toUpperCase();
-    const existing = getByUniqueId(uid);
+    const existing = getByUniqueId(uniqueId.trim().toUpperCase());
+    if (existing) handleEdit(existing);
+  };
+
+  const selectId = (id: string) => {
+    setUniqueId(id);
+    setShowDropdown(false);
+    setIdSearch('');
+    const existing = getByUniqueId(id);
     if (existing) handleEdit(existing);
   };
 
   const isEditing = editingId !== null;
-  const canSave   = uniqueId.trim().length > 0;
+  // Can only save if ID exists in Proposal Details
+  const canSave = uniqueId.trim().length > 0 && idExistsInSystem;
 
   return (
-    <div className="max-w-screen-lg mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Lead Prioritization"
         subtitle="Score and categorize leads based on fixed checkpoints."
@@ -96,32 +127,82 @@ export const LeadPrioritizationPage: React.FC = () => {
         {/* ── Left: checklist ── */}
         <div className="lg:col-span-2 space-y-5">
 
-          {/* Unique ID input */}
+          {/* Unique ID selector */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Lead Unique ID
+              Select Lead Unique ID
             </label>
-            <div className="flex gap-2">
-              <input
-                value={uniqueId}
-                onChange={e => setUniqueId(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && canSave && handleSave()}
-                placeholder="e.g. UP001"
-                className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 font-mono font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all placeholder:font-normal placeholder:text-slate-400"
-              />
-              {/* Datalist of existing proposal IDs from records */}
-              <datalist id="uid-list">
-                {records.map(r => <option key={r.id} value={r.unique_id} />)}
-              </datalist>
+            <p className="text-xs text-slate-400 mb-3">
+              You can only analyse leads that exist in Proposal Details.
+            </p>
+
+            {/* Searchable dropdown */}
+            <div className="relative">
+              <div
+                className={`flex items-center gap-2 border rounded-xl px-3 py-2.5 cursor-pointer transition-all ${
+                  showDropdown ? 'border-blue-400 ring-2 ring-blue-50' : 'border-slate-200 hover:border-slate-300'
+                }`}
+                onClick={() => setShowDropdown(s => !s)}
+              >
+                <span className={`flex-1 text-sm font-mono font-semibold ${uniqueId ? 'text-slate-800' : 'text-slate-400 font-normal'}`}>
+                  {uniqueId || 'Search or select a Unique ID...'}
+                </span>
+                {uniqueId && idExistsInSystem && (
+                  <CheckCircle2 size={15} className="text-emerald-500 flex-shrink-0" />
+                )}
+                <ChevronDown size={15} className={`text-slate-400 flex-shrink-0 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+              </div>
+
+              {showDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50"
+                  style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+                  <div className="p-2 border-b border-slate-100">
+                    <input
+                      autoFocus
+                      value={idSearch}
+                      onChange={e => setIdSearch(e.target.value)}
+                      placeholder="Type to search..."
+                      className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-blue-400"
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto py-1">
+                    {filteredIds.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">No IDs found</p>
+                    ) : filteredIds.map(id => {
+                      const hasRecord = !!getByUniqueId(id);
+                      return (
+                        <button key={id} onClick={() => selectId(id)}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-blue-50 text-left transition-colors ${uniqueId === id ? 'bg-blue-50' : ''}`}>
+                          <span className="font-mono font-semibold text-blue-600">{id}</span>
+                          {hasRecord && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium">Scored</span>}
+                        </button>
+                      );
+                    })}
+                    {allUniqueIds.length > 50 && !idSearch && (
+                      <p className="text-xs text-slate-400 text-center py-2">Showing 50 of {allUniqueIds.length} — type to search</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Warning: existing record */}
-            {existingWarning && (
+            {/* Validation messages */}
+            {uniqueId && !idExistsInSystem && (
+              <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+                <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+                <p className="text-xs text-red-600 font-medium">
+                  "{uniqueId}" does not exist in Proposal Details. You can only score leads that are already in the system.
+                </p>
+              </div>
+            )}
+
+            {existingWarn && idExistsInSystem && (
               <div className="mt-3 flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
                 <AlertCircle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-amber-700">Record already exists for {uniqueId}</p>
-                  <p className="text-xs text-amber-600 mt-0.5">Saving will update the existing record. Or load it to edit.</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Saving will update the existing record.</p>
                 </div>
                 <button onClick={handleLoadExisting}
                   className="text-xs font-semibold text-amber-700 hover:text-amber-800 flex-shrink-0 underline">
@@ -131,37 +212,42 @@ export const LeadPrioritizationPage: React.FC = () => {
             )}
           </div>
 
-          {/* Checklist */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-            <CriteriaChecklist selected={selected} onChange={setSelected} />
-          </div>
+          {/* Checklist — only show if valid ID selected */}
+          {uniqueId && idExistsInSystem ? (
+            <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <CriteriaChecklist selected={selected} onChange={setSelected} />
+            </div>
+          ) : (
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="text-sm font-medium text-slate-500">Select a lead from the dropdown above to start scoring</p>
+              <p className="text-xs text-slate-400 mt-1">Only leads from Proposal Details can be analysed</p>
+            </div>
+          )}
         </div>
 
         {/* ── Right: score + save ── */}
         <div className="space-y-4 lg:sticky lg:top-4 self-start">
-          {/* Score */}
           <ScoreDisplay score={score} />
 
-          {/* Save button */}
           <button
             onClick={handleSave}
             disabled={!canSave || saveStatus === 'saving'}
-            className={`
-              w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all
-              ${saveStatus === 'saved'  ? 'bg-emerald-500 text-white' :
-                saveStatus === 'error'  ? 'bg-red-500 text-white' :
-                saveStatus === 'saving' ? 'bg-blue-400 text-white cursor-wait' :
-                canSave                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200' :
-                                          'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }
-            `}
-          >
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all ${
+              saveStatus === 'saved'  ? 'bg-emerald-500 text-white' :
+              saveStatus === 'error'  ? 'bg-red-500 text-white' :
+              saveStatus === 'saving' ? 'bg-blue-400 text-white cursor-wait' :
+              canSave                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200' :
+                                        'bg-slate-100 text-slate-400 cursor-not-allowed'
+            }`}>
             {saveStatus === 'saved'  ? <><CheckCircle2 size={16} /> Saved!</> :
              saveStatus === 'error'  ? <><AlertCircle size={16} /> Error — try again</> :
              saveStatus === 'saving' ? <>Saving...</> :
-             <><Save size={16} /> {isEditing ? 'Update Record' : 'Save Record'}</>
-            }
+             <><Save size={16} /> {isEditing ? 'Update Record' : 'Save Record'}</>}
           </button>
+
+          {!canSave && uniqueId && !idExistsInSystem && (
+            <p className="text-xs text-red-500 text-center">Select a valid lead ID to save</p>
+          )}
 
           {/* Quick summary */}
           {selected.length > 0 && (
@@ -198,9 +284,9 @@ export const LeadPrioritizationPage: React.FC = () => {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Tier Reference</p>
             <div className="space-y-2">
               {([
-                { tier: 'High Tier' as const,   range: '35 to 50+', color: 'text-emerald-600' },
-                { tier: 'Medium Tier' as const,  range: '20 to 34',  color: 'text-amber-600'  },
-                { tier: 'Low Tier' as const,     range: '0 to 19',   color: 'text-slate-500'  },
+                { tier: 'High Tier'   as const, range: '35+',    color: 'text-emerald-600' },
+                { tier: 'Medium Tier' as const, range: '20–34',  color: 'text-amber-600'   },
+                { tier: 'Low Tier'    as const, range: '0–19',   color: 'text-slate-500'   },
               ]).map(({ tier: t, range, color }) => (
                 <div key={t} className={`flex items-center justify-between rounded-xl px-3 py-2 ${t === tier ? 'bg-slate-50' : ''}`}>
                   <TierBadge tier={t} size="sm" />
@@ -214,11 +300,7 @@ export const LeadPrioritizationPage: React.FC = () => {
 
       {/* Saved records */}
       {!loading && (
-        <SavedRecords
-          records={records}
-          onEdit={handleEdit}
-          onDelete={deleteRecord}
-        />
+        <SavedRecords records={records} onEdit={handleEdit} onDelete={deleteRecord} />
       )}
     </div>
   );

@@ -14,6 +14,7 @@ interface MergedRow {
 interface LATableProps {
   columns: LAColumn[];
   rows: MergedRow[];
+  priorityByUniqueId?: Record<string, { score: number; tier: string }>;
   onUpdateCell: (uniqueId: string, colId: string, value: string) => void;
   onDeleteColumn: (colId: string) => void;
   onRenameColumn: (colId: string, name: string) => void;
@@ -132,7 +133,7 @@ const ReadOnlyCell = memo(({ value }: { col: LAColumn; value: string }) => {
 
 // ── Main table ────────────────────────────────────────────────────────────────
 export const LATable: React.FC<LATableProps> = ({
-  columns, rows,
+  columns, rows, priorityByUniqueId = {},
   onUpdateCell, onDeleteColumn, onRenameColumn, onResizeColumn,
   onReorderColumns, onUpdateColumnOptions,
 }) => {
@@ -197,6 +198,7 @@ export const LATable: React.FC<LATableProps> = ({
           <colgroup>
             <col style={{ width: ID_W, minWidth: ID_W }} />
             <col style={{ width: ST_W, minWidth: ST_W }} />
+            <col style={{ width: 140, minWidth: 140 }} />
             {columns.map(c => <col key={c.id} style={{ width: c.width, minWidth: c.width }} />)}
           </colgroup>
 
@@ -209,6 +211,10 @@ export const LATable: React.FC<LATableProps> = ({
               {/* Status */}
               <th className="border-r border-slate-100 px-3 text-left" style={{ height: 40 }}>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</span>
+              </th>
+              {/* Lead Category */}
+              <th className="border-r border-slate-100 px-3 text-left" style={{ height: 40, width: 140 }}>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Lead Category</span>
               </th>
 
               {columns.map((col, _idx) => (
@@ -281,6 +287,27 @@ export const LATable: React.FC<LATableProps> = ({
                   ) : (
                     <span className="text-slate-300 text-xs">—</span>
                   )}
+                </td>
+
+                {/* Lead Category from prioritization */}
+                <td className="border-r border-slate-100 px-2.5" style={{ width: 140 }}>
+                  {priorityByUniqueId[row.uniqueId] ? (() => {
+                    const p = priorityByUniqueId[row.uniqueId];
+                    const tierStyle =
+                      p.tier === 'High Tier'   ? 'bg-emerald-100 text-emerald-700' :
+                      p.tier === 'Medium Tier' ? 'bg-amber-100 text-amber-700' :
+                                                  'bg-slate-100 text-slate-600';
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${tierStyle}`}>
+                          {p.tier.replace(' Tier', '')}
+                        </span>
+                        <span className="text-xs text-slate-500 tabular-nums font-medium">
+                          {p.score > 0 ? `+${p.score}` : p.score}
+                        </span>
+                      </div>
+                    );
+                  })() : <span className="text-slate-300 text-xs">Not scored</span>}
                 </td>
 
                 {/* Data cells */}
