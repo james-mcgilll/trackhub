@@ -59,6 +59,15 @@ export function useTransactions() {
     bg(supabase.from('tx_rows').insert(row));
   }, []);
 
+  const duplicateRow = useCallback((rowId: string) => {
+    const src = rowsRef.current.find(r => r.id === rowId);
+    if (!src) return;
+    const copy: Row = { id: uid('tx'), display_id: '', data: { ...src.data }, created_at: new Date().toISOString() };
+    rowsRef.current = [...rowsRef.current, copy];
+    setRows(prev => { const idx = prev.findIndex(r => r.id === rowId); const next = [...prev]; next.splice(idx + 1, 0, copy); return next; });
+    bg(supabase.from('tx_rows').insert(copy));
+  }, []);
+
   const deleteRow = useCallback((rowId: string) => {
     rowsRef.current = rowsRef.current.filter(r => r.id !== rowId);
     setRows(prev => prev.filter(r => r.id !== rowId));
@@ -156,7 +165,7 @@ export function useTransactions() {
   return {
     columns: [...columns].sort((a, b) => a.order - b.order),
     rows, loading,
-    addRow, deleteRow, updateCell, importRows,
+    addRow, duplicateRow, deleteRow, updateCell, importRows,
     addColumn, deleteColumn, renameColumn, changeColumnType,
     resizeColumn, reorderColumns, updateColumnOptions,
   };
