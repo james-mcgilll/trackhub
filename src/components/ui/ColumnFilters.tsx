@@ -11,8 +11,8 @@ interface ColumnFiltersProps {
   columns: Column[];
   activeFilters: ActiveFilter[];
   onFiltersChange: (filters: ActiveFilter[]) => void;
-  // For resolving option IDs to labels
   optionMap?: Record<string, Record<string, string>>;
+  rowValuesByColId?: Record<string, string[]>; // actual unique values per column
 }
 
 // ── Filter a set of rows against active filters ───────────────────────────────
@@ -71,12 +71,18 @@ const ColFilterDropdown: React.FC<ColFilterDropdownProps> = ({
 
   const selected = new Set(active?.values ?? []);
 
-  const options = column.type === 'dropdown' && column.options
-    ? (column.options as {id:string;label:string;color?:string}[])
-        .filter(o => !search || o.label.toLowerCase().includes(search.toLowerCase()))
-    : allValues
-        .filter(v => !search || v.toLowerCase().includes(search.toLowerCase()))
-        .map(v => ({ id: v, label: optionMap?.[column.id]?.[v] ?? v }));
+  // Build options list: prefer column.options for dropdowns, fallback to unique values from rows
+  const options = (() => {
+    if (column.type === 'dropdown' && column.options && (column.options as any[]).length > 0) {
+      return (column.options as {id:string;label:string;color?:string}[])
+        .filter(o => !search || o.label.toLowerCase().includes(search.toLowerCase()));
+    }
+    // For linked/text columns, use actual unique values from row data
+    const unique = Array.from(new Set(allValues.filter(Boolean)));
+    return unique
+      .filter(v => !search || v.toLowerCase().includes(search.toLowerCase()))
+      .map(v => ({ id: v, label: optionMap?.[column.id]?.[v] ?? v }));
+  })();
 
   const toggle = (id: string) => {
     const next = new Set(selected);
@@ -135,6 +141,7 @@ const ColFilterDropdown: React.FC<ColFilterDropdownProps> = ({
 // ── Main filter bar ───────────────────────────────────────────────────────────
 export const ColumnFilters: React.FC<ColumnFiltersProps> = ({
   columns, activeFilters, onFiltersChange, optionMap,
+  rowValuesByColId,
 }) => {
   const [openCol, setOpenCol]       = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
@@ -253,7 +260,7 @@ export const ColumnFilters: React.FC<ColumnFiltersProps> = ({
           column={openColObj}
           active={activeFilters.find(f => f.colId === openCol)}
           optionMap={optionMap}
-          allValues={[]}
+          allValues={rowValuesByColId?.[openCol ?? ''] ?? []}
           onChange={handleFilterChange}
           onClose={() => setOpenCol(null)}
           anchorRect={anchorRect}

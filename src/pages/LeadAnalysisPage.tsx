@@ -33,6 +33,19 @@ export const LeadAnalysisPage: React.FC = () => {
 
 
   // All derived state as useMemo — no code between hooks
+  // Collect actual unique values per column from merged data (for filter dropdowns)
+  const rowValuesByColId = React.useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const row of mergedRows) {
+      for (const [colId, val] of Object.entries(row.data)) {
+        if (!val) continue;
+        if (!map[colId]) map[colId] = [];
+        if (!map[colId].includes(val)) map[colId].push(val);
+      }
+    }
+    return map;
+  }, [mergedRows]);
+
   const optionMap = React.useMemo(() => {
     const map: Record<string, Record<string, string>> = {};
     for (const col of laColumns) {
@@ -161,6 +174,7 @@ export const LeadAnalysisPage: React.FC = () => {
         activeFilters={activeFilters}
         onFiltersChange={handleFiltersChange}
         optionMap={optionMap}
+        rowValuesByColId={rowValuesByColId}
       />
 
       {/* Stats bar */}
