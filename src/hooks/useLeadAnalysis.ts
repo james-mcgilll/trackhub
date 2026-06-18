@@ -32,8 +32,20 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
       try {
         const { data: colData, error: colErr } = await supabase
           .from('la_columns').select('*').order('order');
-        if (!colErr && colData) setLaColumns(colData as LAColumn[]);
-        else if (colErr) console.warn('la_columns table not ready:', colErr.message);
+        if (!colErr && colData) {
+          // Map snake_case from Supabase to camelCase LAColumn
+          const mapped: LAColumn[] = colData.map((r: any) => ({
+            id:          r.id,
+            name:        r.name,
+            source:      r.source,
+            linkedColId: r.linked_col_id ?? undefined,
+            type:        r.type,
+            options:     r.options ?? null,
+            width:       r.width,
+            order:       r.order,
+          }));
+          setLaColumns(mapped);
+        } else if (colErr) console.warn('la_columns table not ready:', colErr.message);
 
         const { data: rowData, error: rowErr } = await supabase
           .from('la_rows').select('*').order('created_at');
@@ -157,18 +169,30 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
   }, [laRows, laColumns, proposalRowByUniqueId, statusCol, optionLabelMap]);
 
   // ── Column operations — saved to Supabase ──────────────────────────────────
+  // Convert LAColumn camelCase to Supabase snake_case for storage
+  const toDb = (col: LAColumn) => ({
+    id:             col.id,
+    name:           col.name,
+    source:         col.source,
+    linked_col_id:  col.linkedColId ?? null,
+    type:           col.type,
+    options:        col.options ?? null,
+    width:          col.width,
+    order:          col.order,
+  });
+
   const addLinkedColumn = useCallback((name: string, linkedColId: string, type: LAColumn['type']) => {
     const maxOrder = laColumns.length > 0 ? Math.max(...laColumns.map(c => c.order)) : -1;
     const newCol: LAColumn = { id: uid('lac'), name, source: 'linked', linkedColId, type, options: null, width: 180, order: maxOrder + 1 };
     setLaColumns(prev => [...prev, newCol].sort((a, b) => a.order - b.order));
-    bg(supabase.from('la_columns').insert(newCol));
+    bg(supabase.from('la_columns').insert(toDb(newCol)));
   }, [laColumns]);
 
   const addLocalColumn = useCallback((name: string, type: LAColumn['type'], options: {label:string;color:string}[] = []) => {
     const maxOrder = laColumns.length > 0 ? Math.max(...laColumns.map(c => c.order)) : -1;
     const newCol: LAColumn = { id: uid('lac'), name, source: 'local', type, options: type === 'dropdown' ? options.map(o => ({ id: uid('opt'), ...o })) : null, width: 180, order: maxOrder + 1 };
     setLaColumns(prev => [...prev, newCol].sort((a, b) => a.order - b.order));
-    bg(supabase.from('la_columns').insert(newCol));
+    bg(supabase.from('la_columns').insert(toDb(newCol)));
   }, [laColumns]);
 
   const deleteColumn = useCallback((colId: string) => {
