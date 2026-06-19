@@ -196,6 +196,7 @@ export const TransactionsPage: React.FC = () => {
       if (!customFrom && !customTo) return rows;
       return rows.filter(r => {
         const d = normalizeDate(r.data[dateCol.id]??'');
+        if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return true; // keep rows with unparseable dates
         if (customFrom && d < customFrom) return false;
         if (customTo   && d > customTo)   return false;
         return true;
@@ -260,19 +261,26 @@ export const TransactionsPage: React.FC = () => {
     const by: Record<string,{income:number;expense:number}> = {};
     for (const row of profileFilteredRows) {
       const d = normalizeDate(row.data[dateCol.id]??'');
-      if (!d) continue;
-      const mo = d.slice(0,7);
+      // Only use properly normalized YYYY-MM-DD dates
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      const mo = d.slice(0,7); // YYYY-MM
       if (!by[mo]) by[mo]={income:0,expense:0};
       const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
       if (isIncome(row)) by[mo].income+=amt; else by[mo].expense+=amt;
     }
     const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return Object.entries(by).sort(([a],[b])=>a.localeCompare(b)).map(([mo,v])=>{
-      const [yr, mnStr] = mo.split('-');
-      const mn = parseInt(mnStr,10)-1;
-      const label = `${MONTH_NAMES[mn] ?? mnStr} ${yr.slice(2)}`;
-      return { label, ...v };
-    });
+    return Object.entries(by)
+      .filter(([mo]) => /^\d{4}-\d{2}$/.test(mo)) // only valid YYYY-MM keys
+      .sort(([a],[b]) => a.localeCompare(b))
+      .map(([mo, v]) => {
+        const parts = mo.split('-');
+        const yr  = parts[0] ?? '????';
+        const mn  = parseInt(parts[1] ?? '0', 10) - 1;
+        const label = mn >= 0 && mn < 12
+          ? `${MONTH_NAMES[mn]} '${yr.slice(2)}`
+          : mo;
+        return { label, ...v };
+      });
   }, [profileFilteredRows, dateCol, amountCol, isIncome]);
 
   // Profile breakdown
