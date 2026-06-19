@@ -12,33 +12,103 @@ import type { ColumnType, Row } from '../types/proposals';
 const ROWS_PER_PAGE = 100;
 
 const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}[] }> = ({ data }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [width, setWidth] = React.useState(700);
+  const [tooltip, setTooltip] = React.useState<{x:number;y:number;d:{label:string;income:number;expense:number}}|null>(null);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(e => setWidth(e[0]?.contentRect.width ?? 700));
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   if (!data.length) return null;
+
   const max = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1);
-  const W=700,H=160,PL=48,PB=32,PT=10,PR=8;
+  const H=220, PL=52, PB=40, PT=16, PR=12;
+  const W = width;
   const cw = (W-PL-PR)/data.length;
-  const bw = Math.max(6, cw/2-3);
+  const bw = Math.max(4, Math.min(24, cw/2-2));
   const y  = (v:number) => PT+(H-PT-PB)*(1-v/max);
-  const h  = (v:number) => (H-PT-PB)*(v/max);
-  const fmt = (n:number) => n>=1000?`${(n/1000).toFixed(0)}k`:`${n.toFixed(0)}`;
+  const h  = (v:number) => Math.max(0, (H-PT-PB)*(v/max));
+  const fmt  = (n:number) => n>=1000?`${(n/1000).toFixed(1)}k`:`${n.toFixed(0)}`;
+  const fmt2 = (n:number) => n.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // Show labels only every N bars to prevent collision
+  const minLabelWidth = 40;
+  const labelEvery = Math.max(1, Math.ceil(data.length * minLabelWidth / (W - PL - PR)));
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{maxHeight:160}}>
-      {[0,0.5,1].map((t,i)=>(
-        <g key={i}>
-          <line x1={PL} y1={PT+(H-PT-PB)*t} x2={W-PR} y2={PT+(H-PT-PB)*t} stroke="#f1f5f9" strokeWidth={1}/>
-          <text x={PL-4} y={PT+(H-PT-PB)*t+4} textAnchor="end" fontSize={9} fill="#94a3b8">{fmt(max*(1-t))}</text>
-        </g>
-      ))}
-      {data.map((d,i)=>{
-        const cx=PL+i*cw+cw/2;
-        return (
-          <g key={i}>
-            {d.income>0  && <rect x={cx-bw-1} y={y(d.income)}  width={bw} height={h(d.income)}  fill="#10b981" rx={2} opacity={0.85}/>}
-            {d.expense>0 && <rect x={cx+1}    y={y(d.expense)} width={bw} height={h(d.expense)} fill="#f43f5e" rx={2} opacity={0.85}/>}
-            <text x={cx} y={H-4} textAnchor="middle" fontSize={9} fill="#94a3b8">{d.label}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div ref={containerRef} className="relative w-full">
+      <svg width={W} height={H} onMouseLeave={() => setTooltip(null)}>
+        {/* Y grid lines */}
+        {[0,0.25,0.5,0.75,1].map((t,i) => {
+          const yy = PT+(H-PT-PB)*t;
+          return (
+            <g key={i}>
+              <line x1={PL} y1={yy} x2={W-PR} y2={yy} stroke={i===4?'#e2e8f0':'#f1f5f9'} strokeWidth={i===4?1.5:1}/>
+              <text x={PL-6} y={yy+4} textAnchor="end" fontSize={10} fill="#94a3b8" fontFamily="Inter,sans-serif">{fmt(max*(1-t))}</text>
+            </g>
+          );
+        })}
+
+        {/* Bars */}
+        {data.map((d,i) => {
+          const cx = PL + i*cw + cw/2;
+          return (
+            <g key={i}
+              onMouseEnter={_e => {
+                setTooltip({ x: cx, y: Math.min(y(Math.max(d.income,d.expense)), H-PT-PB-10), d });
+              }}>
+              {/* Hover background */}
+              <rect x={PL+i*cw} y={PT} width={cw} height={H-PT-PB} fill="transparent" className="cursor-pointer"/>
+              {d.income>0  && <rect x={cx-bw-1} y={y(d.income)}  width={bw} height={h(d.income)}  fill="#10b981" rx={2} opacity={tooltip?.d.label===d.label?1:0.8}/>}
+              {d.expense>0 && <rect x={cx+1}    y={y(d.expense)} width={bw} height={h(d.expense)} fill="#f43f5e" rx={2} opacity={tooltip?.d.label===d.label?1:0.8}/>}
+              {/* X label — show every N */}
+              {i % labelEvery === 0 && (
+                <text x={cx} y={H-6} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="Inter,sans-serif">{d.label}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div className="absolute z-50 bg-white border border-slate-200 rounded-xl shadow-xl pointer-events-none"
+          style={{
+            left: tooltip.x > W*0.7 ? tooltip.x - 160 : tooltip.x + 12,
+            top: 20,
+            minWidth: 150,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          }}>
+          <div className="px-3 py-2 border-b border-slate-100">
+            <p className="text-xs font-bold text-slate-700">{tooltip.d.label}</p>
+          </div>
+          <div className="px-3 py-2 space-y-1.5">
+            {tooltip.d.income>0 && (
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"/><span className="text-xs text-slate-600">Income</span></div>
+                <span className="text-xs font-bold text-emerald-600">{fmt2(tooltip.d.income)}</span>
+              </div>
+            )}
+            {tooltip.d.expense>0 && (
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400"/><span className="text-xs text-slate-600">Expense</span></div>
+                <span className="text-xs font-bold text-red-500">{fmt2(tooltip.d.expense)}</span>
+              </div>
+            )}
+            <div className="border-t border-slate-100 pt-1.5 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Net</span>
+              <span className={`text-xs font-bold ${tooltip.d.income-tooltip.d.expense>=0?'text-blue-600':'text-red-500'}`}>
+                {fmt2(tooltip.d.income-tooltip.d.expense)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
