@@ -150,33 +150,37 @@ export const TransactionsPage: React.FC = () => {
 
   const normalizeDate = (val: string): string => {
     if (!val) return '';
-    // yyyy-mm-dd already
-    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-    // MM/DD/YYYY or M/D/YYYY
-    const mdy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
-    // DD/MM/YYYY
-    const dmy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (dmy) {
-      const yr = dmy[3].length===2 ? `20${dmy[3]}` : dmy[3];
-      return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
-    }
-    // DD-Mon or DD-Mon-YY or DD-Mon-YYYY (e.g. "26-Jun", "26-Jun-24", "26-Jun-2024")
-    const dmon = val.match(/^(\d{1,2})[- ]([A-Za-z]{3})(?:[- ](\d{2,4}))?$/);
+    const v = val.trim();
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    // DD-Mon-YYYY or DD-Mon-YY or DD-Mon (e.g. "26-Jun-2025", "26-Jun-25", "26-Jun")
+    // Check this FIRST before any numeric-only patterns
+    const dmon = v.match(/^(\d{1,2})[- /]([A-Za-z]{3,9})[- /]?(\d{2,4})?$/);
     if (dmon) {
-      const mo = MONTHS[dmon[2].toLowerCase()];
+      const mo = MONTHS[dmon[2].slice(0,3).toLowerCase()];
       if (mo) {
-        const yr = dmon[3] ? (dmon[3].length===2 ? `20${dmon[3]}` : dmon[3]) : new Date().getFullYear().toString();
+        const yr = dmon[3]
+          ? (dmon[3].length <= 2 ? `20${dmon[3]}` : dmon[3])
+          : new Date().getFullYear().toString();
         return `${yr}-${mo}-${dmon[1].padStart(2,'0')}`;
       }
     }
-    // Mon DD, YYYY
-    const mdy2 = val.match(/^([A-Za-z]{3})\s+(\d{1,2}),?\s+(\d{4})$/);
+    // Mon-DD-YYYY or Mon DD YYYY
+    const mdy2 = v.match(/^([A-Za-z]{3,9})[- /](\d{1,2})[,- /]+(\d{4})$/);
     if (mdy2) {
-      const mo = MONTHS[mdy2[1].toLowerCase()];
+      const mo = MONTHS[mdy2[1].slice(0,3).toLowerCase()];
       if (mo) return `${mdy2[3]}-${mo}-${mdy2[2].padStart(2,'0')}`;
     }
-    return val;
+    // MM/DD/YYYY (4-digit year = unambiguous US format)
+    const mdy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+    // DD/MM/YY
+    const dmy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (dmy) return `20${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+    // YYYY/MM/DD
+    const ymd = v.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+    if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
+    return ''; // return empty so invalid dates are skipped in chart
   };
   const parseAmt = (v:string) => parseFloat(v.replace(/[^0-9.-]/g,'')) || 0;
 
