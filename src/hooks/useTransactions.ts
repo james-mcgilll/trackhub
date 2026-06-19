@@ -32,6 +32,8 @@ export function useTransactions() {
           if (data.length < 1000) break;
           from += 1000;
         }
+        // Sort newest first
+        allRows.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
         setRows(allRows);
         rowsRef.current = allRows;
       } catch (e) { console.warn('Transactions load error:', e); }

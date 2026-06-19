@@ -250,9 +250,19 @@ export const TransactionsPage: React.FC = () => {
 
   const filteredRows = useMemo(() => applyFilters(profileFilteredRows, activeFilters), [profileFilteredRows, activeFilters]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length/ROWS_PER_PAGE));
+  // Sort newest first by transaction date column, fallback to created_at
+  const sortedRows = useMemo(() => {
+    if (!dateCol) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const da = normalizeDate(a.data[dateCol.id] ?? '') || (a.created_at ?? '');
+      const db = normalizeDate(b.data[dateCol.id] ?? '') || (b.created_at ?? '');
+      return (db ?? '').localeCompare(da ?? '');
+    });
+  }, [filteredRows, dateCol]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length/ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
-  const pageRows   = filteredRows.slice((safePage-1)*ROWS_PER_PAGE, safePage*ROWS_PER_PAGE);
+  const pageRows   = sortedRows.slice((safePage-1)*ROWS_PER_PAGE, safePage*ROWS_PER_PAGE);
 
   const isIncome = useCallback((row: Row) => {
     if (!typeCol) return true;
@@ -500,7 +510,7 @@ export const TransactionsPage: React.FC = () => {
 
       {/* Stats bar */}
       <div className="flex items-center gap-4 text-sm text-slate-500">
-        <span><strong className="text-slate-800">{filteredRows.length.toLocaleString()}</strong> rows{activeFilters.length>0?` of ${rows.length.toLocaleString()} total`:''}</span>
+        <span><strong className="text-slate-800">{sortedRows.length.toLocaleString()}</strong> rows{activeFilters.length>0?` of ${rows.length.toLocaleString()} total`:''}</span>
         {columns.length>0 && <><span className="text-slate-300">|</span><span><strong className="text-slate-800">{columns.length}</strong> columns</span></>}
         <span className="ml-auto text-xs text-slate-400 hidden md:block">Right-click column header for options · Drag to reorder</span>
       </div>
