@@ -11,7 +11,7 @@ import type { ColumnType, Row } from '../types/proposals';
 
 const ROWS_PER_PAGE = 100;
 
-const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}[] }> = ({ data }) => {
+const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}[]; granularity: 'daily'|'monthly' }> = ({ data, granularity }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(700);
   const [tooltip, setTooltip] = React.useState<{x:number;y:number;d:{label:string;income:number;expense:number}}|null>(null);
@@ -26,7 +26,8 @@ const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}
   if (!data.length) return null;
 
   const max = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1);
-  const H=220, PL=52, PB=40, PT=16, PR=12;
+  const PB = granularity === 'daily' ? 60 : 40;
+  const H=granularity==='daily'?240:220, PL=52, PT=16, PR=12;
   const W = width;
   const cw = (W-PL-PR)/data.length;
   const bw = Math.max(4, Math.min(24, cw/2-2));
@@ -65,9 +66,21 @@ const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}
               <rect x={PL+i*cw} y={PT} width={cw} height={H-PT-PB} fill="transparent" className="cursor-pointer"/>
               {d.income>0  && <rect x={cx-bw-1} y={y(d.income)}  width={bw} height={h(d.income)}  fill="#10b981" rx={2} opacity={tooltip?.d.label===d.label?1:0.8}/>}
               {d.expense>0 && <rect x={cx+1}    y={y(d.expense)} width={bw} height={h(d.expense)} fill="#f43f5e" rx={2} opacity={tooltip?.d.label===d.label?1:0.8}/>}
-              {/* X label — show every N */}
+              {/* X label — rotated for daily, horizontal for monthly */}
               {i % labelEvery === 0 && (
-                <text x={cx} y={H-6} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="Inter,sans-serif">{d.label}</text>
+                granularity === 'daily' ? (
+                  <text
+                    x={cx} y={H-PB+14}
+                    textAnchor="end"
+                    fontSize={9}
+                    fill="#94a3b8"
+                    fontFamily="Inter,sans-serif"
+                    transform={`rotate(-45, ${cx}, ${H-PB+14})`}>
+                    {d.label}
+                  </text>
+                ) : (
+                  <text x={cx} y={H-6} textAnchor="middle" fontSize={10} fill="#94a3b8" fontFamily="Inter,sans-serif">{d.label}</text>
+                )
               )}
             </g>
           );
@@ -166,7 +179,7 @@ export const TransactionsPage: React.FC = () => {
       }
     }
     // Mon-DD-YYYY or Mon DD YYYY
-    const mdy2 = v.match(/^([A-Za-z]{3,9})[- /](\d{1,2})[,- /]+(\d{4})$/);
+    const mdy2 = v.match(/^([A-Za-z]{3,9})[\-/ ](\d{1,2})[,\- /]+(\d{4})$/);
     if (mdy2) {
       const mo = MONTHS[mdy2[1].slice(0,3).toLowerCase()];
       if (mo) return `${mdy2[3]}-${mo}-${mdy2[2].padStart(2,'0')}`;
@@ -262,30 +275,39 @@ export const TransactionsPage: React.FC = () => {
 
   const chartData = useMemo(() => {
     if (!dateCol || !amountCol) return [];
+
+    // Daily grouping for 1M/3M, monthly for 1Y/All
+    const useDailyGrouping = dateRange === '1M' || dateRange === '3M';
     const by: Record<string,{income:number;expense:number}> = {};
+
     for (const row of profileFilteredRows) {
       const d = normalizeDate(row.data[dateCol.id]??'');
-      // Only use properly normalized YYYY-MM-DD dates
       if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      const mo = d.slice(0,7); // YYYY-MM
-      if (!by[mo]) by[mo]={income:0,expense:0};
+      const key = useDailyGrouping ? d : d.slice(0,7); // YYYY-MM-DD or YYYY-MM
+      if (!by[key]) by[key]={income:0,expense:0};
       const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
-      if (isIncome(row)) by[mo].income+=amt; else by[mo].expense+=amt;
+      if (isIncome(row)) by[key].income+=amt; else by[key].expense+=amt;
     }
+
     const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
     return Object.entries(by)
-      .filter(([mo]) => /^\d{4}-\d{2}$/.test(mo)) // only valid YYYY-MM keys
       .sort(([a],[b]) => a.localeCompare(b))
-      .map(([mo, v]) => {
-        const parts = mo.split('-');
-        const yr  = parts[0] ?? '????';
-        const mn  = parseInt(parts[1] ?? '0', 10) - 1;
-        const label = mn >= 0 && mn < 12
-          ? `${MONTH_NAMES[mn]} '${yr.slice(2)}`
-          : mo;
+      .map(([key, v]) => {
+        let label = key;
+        if (useDailyGrouping) {
+          // Format as DD/MM/YYYY
+          const parts = key.split('-');
+          label = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        } else {
+          // Format as MM/YYYY
+          const parts = key.split('-');
+          const mn = parseInt(parts[1]??'0',10)-1;
+          label = mn>=0&&mn<12 ? `${MONTH_NAMES[mn]}/${parts[0]}` : key;
+        }
         return { label, ...v };
       });
-  }, [profileFilteredRows, dateCol, amountCol, isIncome]);
+  }, [profileFilteredRows, dateCol, amountCol, isIncome, dateRange]);
 
   // Profile breakdown
   const profileData = useMemo(() => {
@@ -439,7 +461,7 @@ export const TransactionsPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <MiniBarChart data={chartData}/>
+          <MiniBarChart data={chartData} granularity={dateRange==='1M'||dateRange==='3M'?'daily':'monthly'}/>
         </div>
       )}
 
