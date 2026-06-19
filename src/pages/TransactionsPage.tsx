@@ -35,9 +35,9 @@ const MiniBarChart: React.FC<{ data: {label:string;income:number;expense:number}
   const fmt  = (n:number) => n>=1000?`${(n/1000).toFixed(1)}k`:`${n.toFixed(0)}`;
   const fmt2 = (n:number) => n.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  // Show labels only every N bars to prevent collision
-  const minLabelWidth = 40;
-  const labelEvery = Math.max(1, Math.ceil(data.length * minLabelWidth / (W - PL - PR)));
+  // Show labels only when bars are wide enough — prevent any collision
+  const availableWidth = W - PL - PR;
+  const labelEvery = Math.max(1, Math.ceil(data.length / Math.floor(availableWidth / 44)));
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -143,11 +143,39 @@ export const TransactionsPage: React.FC = () => {
 
   const resolveLabel = useCallback((colId:string, val:string) => optionMap[colId]?.[val] ?? val, [optionMap]);
 
-  const normalizeDate = (val:string) => {
+  const MONTHS: Record<string,string> = {
+    jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+    jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'
+  };
+
+  const normalizeDate = (val: string): string => {
     if (!val) return '';
+    // yyyy-mm-dd already
     if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-    const m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // MM/DD/YYYY or M/D/YYYY
+    const mdy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+    // DD/MM/YYYY
+    const dmy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (dmy) {
+      const yr = dmy[3].length===2 ? `20${dmy[3]}` : dmy[3];
+      return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+    }
+    // DD-Mon or DD-Mon-YY or DD-Mon-YYYY (e.g. "26-Jun", "26-Jun-24", "26-Jun-2024")
+    const dmon = val.match(/^(\d{1,2})[- ]([A-Za-z]{3})(?:[- ](\d{2,4}))?$/);
+    if (dmon) {
+      const mo = MONTHS[dmon[2].toLowerCase()];
+      if (mo) {
+        const yr = dmon[3] ? (dmon[3].length===2 ? `20${dmon[3]}` : dmon[3]) : new Date().getFullYear().toString();
+        return `${yr}-${mo}-${dmon[1].padStart(2,'0')}`;
+      }
+    }
+    // Mon DD, YYYY
+    const mdy2 = val.match(/^([A-Za-z]{3})\s+(\d{1,2}),?\s+(\d{4})$/);
+    if (mdy2) {
+      const mo = MONTHS[mdy2[1].toLowerCase()];
+      if (mo) return `${mdy2[3]}-${mo}-${mdy2[2].padStart(2,'0')}`;
+    }
     return val;
   };
   const parseAmt = (v:string) => parseFloat(v.replace(/[^0-9.-]/g,'')) || 0;
@@ -238,9 +266,13 @@ export const TransactionsPage: React.FC = () => {
       const amt = Math.abs(parseAmt(row.data[amountCol.id]??''));
       if (isIncome(row)) by[mo].income+=amt; else by[mo].expense+=amt;
     }
-    return Object.entries(by).sort(([a],[b])=>a.localeCompare(b)).map(([mo,v])=>({
-      label: new Date(mo+'-01').toLocaleDateString('en',{month:'short',year:'2-digit'}), ...v
-    }));
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return Object.entries(by).sort(([a],[b])=>a.localeCompare(b)).map(([mo,v])=>{
+      const [yr, mnStr] = mo.split('-');
+      const mn = parseInt(mnStr,10)-1;
+      const label = `${MONTH_NAMES[mn] ?? mnStr} ${yr.slice(2)}`;
+      return { label, ...v };
+    });
   }, [profileFilteredRows, dateCol, amountCol, isIncome]);
 
   // Profile breakdown
