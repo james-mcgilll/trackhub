@@ -99,7 +99,6 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
 
       const toAdd = qualifyingIds.filter(id => !existingMap[id])
         .map(id => ({ unique_id: id, local_data: {}, created_at: new Date().toISOString() }));
-      if (toAdd.length > 0) await supabase.from('la_rows').insert(toAdd);
 
       const allLaRows: LARow[] = qualifyingIds.map(id =>
         existingMap[id]
@@ -107,7 +106,9 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
           : { uniqueId: id, localData: {}, createdAt: new Date().toISOString() }
       ).sort((a, b) => parseInt(b.uniqueId.replace('UP',''),10) - parseInt(a.uniqueId.replace('UP',''),10));
 
+      // Update state immediately (optimistic) then sync to Supabase in background
       setLaRows(allLaRows);
+      if (toAdd.length > 0) { const p = supabase.from('la_rows').insert(toAdd); Promise.resolve(p).catch(() => {}); }
       setSyncStatus(`${qualifyingIds.length} leads`);
       setTimeout(() => setSyncStatus(''), 2000);
     } catch (e) { console.warn('syncLeads error:', e); setSyncStatus(''); }
