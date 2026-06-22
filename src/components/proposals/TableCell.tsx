@@ -169,22 +169,19 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
     };
 
     return (
-      <div className="relative w-full h-full flex items-center hover:bg-slate-50">
-        <span className="absolute left-2.5 text-xs pointer-events-none text-slate-700">
-          {value ? displayDate(value) : <span className="text-slate-300">dd/mm/yyyy</span>}
-        </span>
-        <input
-          type="date"
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Tab')       { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
-            if (e.key === 'Enter')     { e.preventDefault(); onNavigate(1, 0); }
-            if (e.key === 'Escape')    { e.preventDefault(); onNavigate(0, 0); }
-          }}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        />
-      </div>
+      <input
+        type="date"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Tab')    { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
+          if (e.key === 'Enter')  { e.preventDefault(); onNavigate(1, 0); }
+          if (e.key === 'Escape') { e.preventDefault(); onNavigate(0, 0); }
+        }}
+        placeholder="dd/mm/yyyy"
+        className="w-full h-full px-2.5 text-xs text-slate-700 bg-transparent border-0 outline-none cursor-pointer hover:bg-slate-50 focus:bg-blue-50"
+        style={{ colorScheme: 'light', minWidth: 0 }}
+      />
     );
   }
 

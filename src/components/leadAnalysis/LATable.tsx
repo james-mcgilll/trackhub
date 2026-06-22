@@ -86,23 +86,16 @@ const EditableCell = memo(({ col, value, onChange }: {
 
   if (col.type === 'date') {
     const display = value ? value.split('-').reverse().join('/') : '';
-    // Works in ALL browsers: visible date input styled to look like cell
     return (
-      <div className="relative w-full h-full flex items-center">
-        {!value && (
-          <span className="absolute left-2.5 text-slate-300 text-xs pointer-events-none">dd/mm/yyyy</span>
-        )}
-        {value && (
-          <span className="absolute left-2.5 text-slate-700 text-xs pointer-events-none">{display}</span>
-        )}
-        <input
-          type="date"
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          className="w-full h-full px-2.5 opacity-0 cursor-pointer absolute inset-0"
-          title={display || 'Pick a date'}
-        />
-      </div>
+      <input
+        type="date"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder="dd/mm/yyyy"
+        title={display || 'Select date'}
+        className="w-full h-full px-2.5 text-xs text-slate-700 bg-transparent border-0 outline-none cursor-pointer hover:bg-slate-50 focus:bg-blue-50"
+        style={{ colorScheme: 'light', minWidth: 0 }}
+      />
     );
   }
 
