@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Calendar } from 'lucide-react';
 import type { Column } from '../../types/proposals';
 import { OPTION_COLOR_STYLES, getFunnelStatusStyle } from '../../types/proposals';
 
@@ -161,10 +161,11 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
   // ── Date ──────────────────────────────────────────────────────────────────
   if (column.type === 'date') {
     const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    // Convert any stored format -> YYYY-MM-DD for the picker
+    const dateRef = useRef<HTMLInputElement>(null);
+
     const toIso = (v: string) => {
       if (!v) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; // already ISO
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
       const m = v.match(/^(\d{1,2})[\-\/\s]([A-Za-z]{3})[\-\/\s](\d{2,4})$/);
       if (m) {
         const mo = MN.findIndex(x => x.toLowerCase()===m[2].toLowerCase())+1;
@@ -173,30 +174,37 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
       }
       return '';
     };
-    // Convert YYYY-MM-DD -> DD-Mon-YYYY for storage & display
     const toTx = (v: string) => {
       const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (m) return `${m[3]}-${MN[parseInt(m[2],10)-1]}-${m[1]}`;
       return v;
     };
     const display = toTx(value) || value;
+
     return (
-      <div className="relative w-full h-full flex items-center hover:bg-slate-50">
-        <span className="absolute left-2.5 text-xs pointer-events-none text-slate-700 z-0">
+      <div className="w-full h-full flex items-center px-2.5 gap-1.5 hover:bg-slate-50 group/date">
+        <span className="flex-1 text-xs text-slate-700 truncate">
           {display || <span className="text-slate-300">DD-Mon-YYYY</span>}
         </span>
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            dateRef.current?.click();
+          }}
+          className="flex-shrink-0 p-0.5 text-slate-300 hover:text-blue-500 opacity-0 group-hover/date:opacity-100 transition-all"
+          title="Pick date"
+        >
+          <Calendar size={13} />
+        </button>
         <input
+          ref={dateRef}
           type="date"
           value={toIso(value)}
           onChange={e => { if(e.target.value) onChange(toTx(e.target.value)); }}
           onClick={e => e.stopPropagation()}
-          onFocus={e => e.stopPropagation()}
-          onKeyDown={e => {
-            if (e.key==='Tab')    { e.preventDefault(); onNavigate(0, e.shiftKey?-1:1); }
-            if (e.key==='Enter')  { e.preventDefault(); onNavigate(1, 0); }
-            if (e.key==='Escape') { e.preventDefault(); onNavigate(0, 0); }
-          }}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          className="sr-only"
+          tabIndex={-1}
         />
       </div>
     );

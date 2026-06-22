@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, memo } from 'react';
-import { GripVertical, Link2 } from 'lucide-react';
+import { GripVertical, Link2, Calendar } from 'lucide-react';
 import { getFunnelStatusStyle } from '../../types/proposals';
 import type { LAColumn } from '../../types/leadAnalysis';
 import { OPTION_COLOR_STYLES } from '../../types/proposals';
@@ -85,32 +85,45 @@ const EditableCell = memo(({ col, value, onChange }: {
   }
 
   if (col.type === 'date') {
-    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const toIso = (v: string): string => {
-      const m = v.match(/^(\d{1,2})[- ]([A-Za-z]{3})[- ](\d{4})$/);
+    const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dateRef = useRef<HTMLInputElement>(null);
+    const toIso = (v: string) => {
+      if (!v) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      const m = v.match(/^(\d{1,2})[\-\/\s]([A-Za-z]{3})[\-\/\s](\d{2,4})$/);
       if (m) {
-        const mo = MONTHS.findIndex(mn => mn.toLowerCase() === m[2].toLowerCase()) + 1;
-        if (mo > 0) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        const mo = MN.findIndex(x => x.toLowerCase()===m[2].toLowerCase())+1;
+        const yr = m[3].length===2?`20${m[3]}`:m[3];
+        if (mo>0) return `${yr}-${String(mo).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
       }
-      return v;
+      return '';
     };
-    const toDisplay = (v: string): string => {
+    const toTx = (v: string) => {
       const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (m) return `${m[3]}-${MONTHS[parseInt(m[2],10)-1]}-${m[1]}`;
+      if (m) return `${m[3]}-${MN[parseInt(m[2],10)-1]}-${m[1]}`;
       return v;
     };
+    const display = toTx(value) || value;
     return (
-      <div className="relative w-full h-full flex items-center hover:bg-slate-50">
-        <span className="absolute left-2.5 text-xs pointer-events-none text-slate-700">
-          {value ? toDisplay(value) : <span className="text-slate-300">DD-Mon-YYYY</span>}
+      <div className="w-full h-full flex items-center px-2.5 gap-1.5 hover:bg-slate-50 group/date">
+        <span className="flex-1 text-xs text-slate-700 truncate">
+          {display || <span className="text-slate-300">DD-Mon-YYYY</span>}
         </span>
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); dateRef.current?.click(); }}
+          className="flex-shrink-0 p-0.5 text-slate-300 hover:text-blue-500 opacity-0 group-hover/date:opacity-100 transition-all"
+        >
+          <Calendar size={13} />
+        </button>
         <input
+          ref={dateRef}
           type="date"
-          value={toIso(value) || ''}
-          onChange={e => onChange(toDisplay(e.target.value))}
+          value={toIso(value)}
+          onChange={e => { if(e.target.value) onChange(toTx(e.target.value)); }}
           onClick={e => e.stopPropagation()}
-          onFocus={e => e.stopPropagation()}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          className="sr-only"
+          tabIndex={-1}
         />
       </div>
     );
