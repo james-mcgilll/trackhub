@@ -168,11 +168,20 @@ RULES:
           messages: [...history, { role: 'user', content: text.trim() }],
         }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `API error ${res.status}`);
+      }
+
       const data = await res.json();
       const reply = data.content?.map((b: {type:string;text?:string}) => b.text || '').join('') || 'Sorry, I could not process that.';
       setMessages(prev => [...prev, { id: `a${Date.now()}`, role: 'assistant', content: reply }]);
-    } catch {
-      setMessages(prev => [...prev, { id: `e${Date.now()}`, role: 'assistant', content: 'Something went wrong. Please try again.' }]);
+    } catch (err: any) {
+      const msg = err?.message?.includes('API key') 
+        ? 'API key not configured. Please contact your administrator.'
+        : `Error: ${err?.message || 'Something went wrong. Please try again.'}`;
+      setMessages(prev => [...prev, { id: `e${Date.now()}`, role: 'assistant', content: msg }]);
     } finally {
       setLoading(false);
     }
