@@ -116,8 +116,8 @@ export function useProposalTable() {
   const addRow = useCallback(() => {
     const row: Row = { id: uid('row'), display_id: nextDisplayId(rowsRef.current), data: {}, created_at: new Date().toISOString() };
     localInserts.current.add(row.id);
-    rowsRef.current = [...rowsRef.current, row];
-    setRows(prev => [...prev, row]);
+    rowsRef.current = [row, ...rowsRef.current];
+    setRows(prev => [row, ...prev]);
     bg(supabase.from('proposal_rows').insert(row));
   }, []);
 

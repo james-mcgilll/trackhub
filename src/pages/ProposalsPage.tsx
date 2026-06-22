@@ -219,7 +219,7 @@ export const ProposalsPage: React.FC<ProposalsPageProps> = ({ searchHighlight = 
             </button>
 
             {/* Add Row */}
-            <button onClick={addRow}
+            <button onClick={() => { addRow(); setPage(1); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200">
               <Plus size={14} />Add Row
             </button>
