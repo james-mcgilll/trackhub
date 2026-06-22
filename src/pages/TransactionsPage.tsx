@@ -197,6 +197,15 @@ export const TransactionsPage: React.FC = () => {
   };
   const parseAmt = (v:string) => parseFloat(v.replace(/[^0-9.-]/g,'')) || 0;
 
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const formatTxDate = (iso: string): string => {
+    // Convert YYYY-MM-DD back to DD-Mon-YYYY
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    const [yr, mo, dd] = iso.split('-');
+    const mn = parseInt(mo, 10) - 1;
+    return `${dd}-${MONTH_ABBR[mn] ?? mo}-${yr}`;
+  };
+
   // Column detection — matches your actual column names
   const amountCol   = useMemo(() => columns.find(c => /amount/i.test(c.name) && !/connect/i.test(c.name)), [columns]);
   const typeCol     = useMemo(() => columns.find(c => /transaction\s*type|^type$/i.test(c.name)), [columns]);

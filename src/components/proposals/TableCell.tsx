@@ -160,22 +160,42 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
 
   // ── Date ──────────────────────────────────────────────────────────────────
   if (column.type === 'date') {
+    // Convert YYYY-MM-DD to/from DD-Mon-YYYY for display
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const toIso = (v: string): string => {
+      // DD-Mon-YYYY -> YYYY-MM-DD
+      const m = v.match(/^(\d{1,2})[- ]([A-Za-z]{3})[- ](\d{4})$/);
+      if (m) {
+        const mo = MONTHS.findIndex(mn => mn.toLowerCase() === m[2].toLowerCase()) + 1;
+        if (mo > 0) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      }
+      return v;
+    };
+    const toDisplay = (v: string): string => {
+      // YYYY-MM-DD -> DD-Mon-YYYY
+      const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) return `${m[3]}-${MONTHS[parseInt(m[2],10)-1]}-${m[1]}`;
+      return v; // already in display format or unknown
+    };
     return (
-      <input
-        type="date"
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        onClick={e => e.stopPropagation()}
-        onFocus={e => e.stopPropagation()}
-        onKeyDown={e => {
-          if (e.key === 'Tab')    { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
-          if (e.key === 'Enter')  { e.preventDefault(); onNavigate(1, 0); }
-          if (e.key === 'Escape') { e.preventDefault(); onNavigate(0, 0); }
-        }}
-        placeholder="dd/mm/yyyy"
-        className="w-full h-full px-2.5 text-xs text-slate-700 bg-transparent border-0 outline-none cursor-pointer hover:bg-slate-50 focus:bg-blue-50"
-        style={{ colorScheme: 'light', minWidth: 0 }}
-      />
+      <div className="relative w-full h-full flex items-center hover:bg-slate-50">
+        <span className="absolute left-2.5 text-xs pointer-events-none text-slate-700">
+          {value ? toDisplay(value) : <span className="text-slate-300">DD-Mon-YYYY</span>}
+        </span>
+        <input
+          type="date"
+          value={toIso(value) || ''}
+          onChange={e => onChange(toDisplay(e.target.value))}
+          onClick={e => e.stopPropagation()}
+          onFocus={e => e.stopPropagation()}
+          onKeyDown={e => {
+            if (e.key === 'Tab')    { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
+            if (e.key === 'Enter')  { e.preventDefault(); onNavigate(1, 0); }
+            if (e.key === 'Escape') { e.preventDefault(); onNavigate(0, 0); }
+          }}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+      </div>
     );
   }
 
