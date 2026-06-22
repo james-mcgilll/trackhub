@@ -217,15 +217,28 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     })();
   }, []);
 
-  // Sync whenever proposal data changes — new rows OR status changes
-  const statusSnapshot = useMemo(() => {
+  // Sync whenever qualifying leads change (new rows OR status changes to/from qualifying)
+  const qualifyingSnapshot = useMemo(() => {
     if (!statusCol) return '';
-    return proposalRows.map(r => r.data[statusCol.id] ?? '').join(',');
+    const optMap: Record<string,string> = {};
+    for (const opt of (statusCol.options ?? []) as any[]) {
+      optMap[opt.id] = opt.label;
+      optMap[opt.label.toLowerCase()] = opt.label;
+    }
+    return proposalRows
+      .filter(r => {
+        const val = r.data[statusCol.id] ?? '';
+        const label = optMap[val] ?? optMap[val.toLowerCase()] ?? val;
+        return LA_QUALIFYING_STAGES.includes(label.toLowerCase());
+      })
+      .map(r => r.display_id)
+      .sort()
+      .join(',');
   }, [proposalRows, statusCol]);
 
   useEffect(() => {
     if (proposalRows.length > 0 && statusCol) syncLeads();
-  }, [proposalRows.length, statusSnapshot, statusCol?.id]); // eslint-disable-line
+  }, [qualifyingSnapshot]); // eslint-disable-line
 
   return {
     laColumns: [...laColumns].sort((a, b) => a.order - b.order),
