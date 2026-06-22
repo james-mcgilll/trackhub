@@ -160,14 +160,6 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
 
   // ── Date ──────────────────────────────────────────────────────────────────
   if (column.type === 'date') {
-    // Format yyyy-mm-dd -> dd/mm/yyyy for display
-    const displayDate = (v: string) => {
-      if (!v) return '';
-      const parts = v.split('-');
-      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      return v;
-    };
-
     return (
       <input
         type="date"
