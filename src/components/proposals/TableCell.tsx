@@ -169,34 +169,11 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
     };
 
     return (
-      <div className="relative w-full h-full group/date">
-        {/* Display: dd/mm/yyyy */}
-        <div
-          data-cell={cellKey}
-          tabIndex={0}
-          onKeyDown={e => {
-            if (e.key === 'Tab')       { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
-            if (e.key === 'Enter' || e.key === 'F2') {
-              e.preventDefault();
-              // Trigger the hidden date input
-              (e.currentTarget.nextElementSibling as HTMLInputElement)?.showPicker?.();
-              (e.currentTarget.nextElementSibling as HTMLInputElement)?.focus();
-            }
-            if (e.key === 'ArrowUp')   { e.preventDefault(); onNavigate(-1, 0); }
-            if (e.key === 'ArrowDown') { e.preventDefault(); onNavigate(1, 0); }
-          }}
-          onClick={() => {
-            const input = document.querySelector(`input[data-date-cell="${cellKey}"]`) as HTMLInputElement;
-            input?.showPicker?.();
-            input?.focus();
-          }}
-          className="w-full h-full flex items-center px-2.5 hover:bg-slate-50 focus:outline-none focus:bg-blue-50 cursor-pointer text-xs text-slate-700"
-        >
+      <div className="relative w-full h-full flex items-center hover:bg-slate-50">
+        <span className="absolute left-2.5 text-xs pointer-events-none text-slate-700">
           {value ? displayDate(value) : <span className="text-slate-300">dd/mm/yyyy</span>}
-        </div>
-        {/* Hidden native date input for picking */}
+        </span>
         <input
-          data-date-cell={cellKey}
           type="date"
           value={value || ''}
           onChange={e => onChange(e.target.value)}
@@ -206,7 +183,6 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
             if (e.key === 'Escape')    { e.preventDefault(); onNavigate(0, 0); }
           }}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          style={{ zIndex: 1 }}
         />
       </div>
     );

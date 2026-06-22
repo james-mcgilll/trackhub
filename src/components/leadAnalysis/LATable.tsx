@@ -86,26 +86,21 @@ const EditableCell = memo(({ col, value, onChange }: {
 
   if (col.type === 'date') {
     const display = value ? value.split('-').reverse().join('/') : '';
-    const cellKey = `la-date-${col.id}`;
+    // Works in ALL browsers: visible date input styled to look like cell
     return (
-      <div className="relative w-full h-full">
-        <div
-          className="w-full h-full flex items-center px-2.5 hover:bg-slate-50 cursor-pointer text-xs text-slate-700"
-          onClick={() => {
-            const input = document.querySelector(`input[data-la-date="${cellKey}"]`) as HTMLInputElement;
-            input?.showPicker?.();
-            input?.focus();
-          }}
-        >
-          {display || <span className="text-slate-300">dd/mm/yyyy</span>}
-        </div>
+      <div className="relative w-full h-full flex items-center">
+        {!value && (
+          <span className="absolute left-2.5 text-slate-300 text-xs pointer-events-none">dd/mm/yyyy</span>
+        )}
+        {value && (
+          <span className="absolute left-2.5 text-slate-700 text-xs pointer-events-none">{display}</span>
+        )}
         <input
-          data-la-date={cellKey}
           type="date"
           value={value || ''}
           onChange={e => onChange(e.target.value)}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          style={{ zIndex: 1 }}
+          className="w-full h-full px-2.5 opacity-0 cursor-pointer absolute inset-0"
+          title={display || 'Pick a date'}
         />
       </div>
     );
