@@ -91,6 +91,8 @@ const EditableCell = memo(({ col, value, onChange }: {
         type="date"
         value={value || ''}
         onChange={e => onChange(e.target.value)}
+        onClick={e => e.stopPropagation()}
+        onFocus={e => e.stopPropagation()}
         placeholder="dd/mm/yyyy"
         title={display || 'Select date'}
         className="w-full h-full px-2.5 text-xs text-slate-700 bg-transparent border-0 outline-none cursor-pointer hover:bg-slate-50 focus:bg-blue-50"

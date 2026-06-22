@@ -173,6 +173,8 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
         type="date"
         value={value || ''}
         onChange={e => onChange(e.target.value)}
+        onClick={e => e.stopPropagation()}
+        onFocus={e => e.stopPropagation()}
         onKeyDown={e => {
           if (e.key === 'Tab')    { e.preventDefault(); onNavigate(0, e.shiftKey ? -1 : 1); }
           if (e.key === 'Enter')  { e.preventDefault(); onNavigate(1, 0); }
