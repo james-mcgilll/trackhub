@@ -216,9 +216,15 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
     })();
   }, []);
 
+  // Sync whenever proposal data changes — new rows OR status changes
+  const statusSnapshot = useMemo(() => {
+    if (!statusCol) return '';
+    return proposalRows.map(r => r.data[statusCol.id] ?? '').join(',');
+  }, [proposalRows, statusCol]);
+
   useEffect(() => {
     if (proposalRows.length > 0 && statusCol) syncLeads();
-  }, [proposalRows.length, statusCol?.id]); // eslint-disable-line
+  }, [proposalRows.length, statusSnapshot, statusCol?.id]); // eslint-disable-line
 
   return {
     laColumns: [...laColumns].sort((a, b) => a.order - b.order),

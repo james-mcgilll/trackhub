@@ -87,13 +87,13 @@ const EditableCell = memo(({ col, value, onChange }: {
   if (col.type === 'date') {
     const display = value ? value.split('-').reverse().join('/') : '';
     return (
-      <div className="relative w-full h-full">
-        <div className="w-full h-full flex items-center px-2.5 hover:bg-slate-50 cursor-pointer text-xs text-slate-700">
+      <label className="relative w-full h-full flex items-center px-2.5 hover:bg-slate-50 cursor-pointer">
+        <span className="text-xs text-slate-700 pointer-events-none select-none">
           {display || <span className="text-slate-300">dd/mm/yyyy</span>}
-        </div>
+        </span>
         <input type="date" value={value || ''} onChange={e => onChange(e.target.value)}
           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-      </div>
+      </label>
     );
   }
 
