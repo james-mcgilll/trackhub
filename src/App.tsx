@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Layout } from './components/layout/Layout';
 import { ProposalProvider } from './context/ProposalContext';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { DataAssistant } from './components/chat/DataAssistant';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProposalsPage } from './pages/ProposalsPage';
 import { LeadAnalysisPage } from './pages/LeadAnalysisPage';
@@ -99,7 +98,6 @@ function App() {
       <Layout currentPage={currentPage} onNavigate={navigate}>
         {renderPage()}
       </Layout>
-      <DataAssistant />
     </ProposalProvider>
   );
 }
