@@ -86,16 +86,24 @@ const EditableCell = memo(({ col, value, onChange }: {
 
   if (col.type === 'date') {
     const display = value ? value.split('-').reverse().join('/') : '';
+    const dateInputRef = useRef<HTMLInputElement>(null);
+    const openPicker = () => {
+      dateInputRef.current?.showPicker?.();
+      dateInputRef.current?.focus();
+    };
     return (
-      <div className="relative w-full h-full flex items-center px-2.5 hover:bg-slate-50 cursor-pointer">
-        <span className="text-xs text-slate-700 select-none flex-1">
+      <div className="relative w-full h-full flex items-center px-2.5 hover:bg-slate-50 cursor-pointer"
+        onClick={openPicker} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') openPicker(); }}>
+        <span className="text-xs text-slate-700 pointer-events-none">
           {display || <span className="text-slate-300">dd/mm/yyyy</span>}
         </span>
         <input
+          ref={dateInputRef}
           type="date"
           value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }}
+          onChange={e => { onChange(e.target.value); }}
+          onClick={e => e.stopPropagation()}
+          className="sr-only"
         />
       </div>
     );
