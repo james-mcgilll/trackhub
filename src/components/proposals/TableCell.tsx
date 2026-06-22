@@ -183,29 +183,24 @@ export const TableCell = memo(({ column, value, cellKey, onChange, onNavigate }:
 
     return (
       <div className="w-full h-full flex items-center px-2.5 gap-1.5 hover:bg-slate-50 group/date">
-        <span className="flex-1 text-xs text-slate-700 truncate">
+        <span className="flex-1 text-xs text-slate-700 truncate pointer-events-none">
           {display || <span className="text-slate-300">DD-Mon-YYYY</span>}
         </span>
-        <button
-          type="button"
-          onClick={e => {
-            e.stopPropagation();
-            dateRef.current?.click();
-          }}
-          className="flex-shrink-0 p-0.5 text-slate-300 hover:text-blue-500 opacity-0 group-hover/date:opacity-100 transition-all"
-          title="Pick date"
-        >
-          <Calendar size={13} />
-        </button>
-        <input
-          ref={dateRef}
-          type="date"
-          value={toIso(value)}
-          onChange={e => { if(e.target.value) onChange(toTx(e.target.value)); }}
-          onClick={e => e.stopPropagation()}
-          className="sr-only"
-          tabIndex={-1}
-        />
+        {/* Calendar icon with native date input sitting exactly on top of it */}
+        <div className="relative flex-shrink-0 w-5 h-5 opacity-0 group-hover/date:opacity-100 transition-all">
+          <Calendar size={13} className="text-blue-500 absolute inset-0 m-auto pointer-events-none" />
+          <input
+            ref={dateRef}
+            type="date"
+            value={toIso(value)}
+            onChange={e => { if(e.target.value) onChange(toTx(e.target.value)); }}
+            onClick={e => e.stopPropagation()}
+            onFocus={e => e.stopPropagation()}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            style={{ zIndex: 2 }}
+            title="Pick date"
+          />
+        </div>
       </div>
     );
   }
