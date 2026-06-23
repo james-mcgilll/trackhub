@@ -41,6 +41,7 @@ interface LineChartProps {
 interface TooltipState {
   date: string;
   counts: Record<string, number>;
+  sdrCounts: Record<string, number>;
   total: number;
   x: number;
   y: number;
@@ -154,7 +155,7 @@ export const LineChart: React.FC<LineChartProps> = ({
               fill="transparent" style={{ cursor: 'pointer' }}
               onMouseEnter={() => {
                 setHoverIdx(i);
-                setTooltip({ date: d.date, counts: d.counts, total: d.total, x: xPos(i), y: PAD.t });
+                setTooltip({ date: d.date, counts: d.counts, sdrCounts: (d as any).sdrCounts ?? {}, total: d.total, x: xPos(i), y: PAD.t });
               }}
               onClick={() => onDayClick(d.date)}
             />
@@ -195,6 +196,20 @@ export const LineChart: React.FC<LineChartProps> = ({
               );
             })}
           </div>
+          {/* SDR breakdown */}
+            {Object.keys(tooltip.sdrCounts).length > 0 && (
+              <div className="border-t border-slate-100 pt-2 mt-1">
+                <p className="text-xs font-semibold text-slate-500 mb-1.5">By SDR</p>
+                {Object.entries(tooltip.sdrCounts)
+                  .sort(([,a],[,b]) => b - a)
+                  .map(([sdr, count]) => (
+                    <div key={sdr} className="flex items-center justify-between gap-3 py-0.5">
+                      <span className="text-xs text-slate-600 truncate max-w-28">{sdr}</span>
+                      <span className="text-xs font-bold text-slate-800">{count}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
           {markers[tooltip.date] && (
             <div className="px-3 py-1.5 border-t border-slate-50">
               <p className="text-xs font-medium" style={{ color: MARKER_COLORS[markers[tooltip.date].type] }}>

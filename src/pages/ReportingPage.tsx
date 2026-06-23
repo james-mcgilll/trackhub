@@ -163,6 +163,7 @@ export const ReportingPage: React.FC = () => {
     if (!dateCol || series.length === 0 || dates.length === 0) return [];
 
     const lookup: Record<string, Record<string, number>> = {};
+    const sdrLookup: Record<string, Record<string, number>> = {};
     for (const row of filteredRows) {
       const dateVal = normalizeDate(row.data[dateCol.id] ?? '');
       if (!dateVal || !dates.includes(dateVal)) continue;
@@ -171,6 +172,12 @@ export const ReportingPage: React.FC = () => {
       if (!statusLabel) continue;
       if (!lookup[dateVal]) lookup[dateVal] = {};
       lookup[dateVal][statusLabel] = (lookup[dateVal][statusLabel] ?? 0) + 1;
+      // SDR breakdown per day
+      if (sdrCol) {
+        const sdrName = resolveLabel(sdrCol.id, row.data[sdrCol.id] ?? '') || 'Unknown';
+        if (!sdrLookup[dateVal]) sdrLookup[dateVal] = {};
+        sdrLookup[dateVal][sdrName] = (sdrLookup[dateVal][sdrName] ?? 0) + 1;
+      }
     }
 
     return dates.map(date => {
@@ -181,9 +188,9 @@ export const ReportingPage: React.FC = () => {
         counts[s.label] = dayData[s.label] ?? 0;
         total += counts[s.label];
       }
-      return { date, counts, total };
+      return { date, counts, total, sdrCounts: sdrLookup[date] ?? {} };
     });
-  }, [filteredRows, dates, dateCol, statusCol, series, resolveLabel]);
+  }, [filteredRows, dates, dateCol, statusCol, sdrCol, series, resolveLabel]);
 
   // ── Summary counts — only rows within the selected date range ───────────────
   const exactCounts = useMemo(() => {
