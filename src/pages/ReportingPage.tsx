@@ -105,13 +105,27 @@ export const ReportingPage: React.FC = () => {
     return Array.from(vals).sort();
   }, [rows, profileCol, resolveLabel]);
 
-  // Normalize date format
+  // Normalize any date format -> YYYY-MM-DD
   const normalizeDate = (val: string): string => {
     if (!val) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-    const mdy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const v = val.trim();
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    // DD-Mon-YYYY or DD-Mon-YY (e.g. 22-Jun-2026, 22-Jun-26)
+    const MO: Record<string,string> = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+    const dmon = v.match(/^(\d{1,2})[- ]([A-Za-z]{3})[- ](\d{2,4})$/);
+    if (dmon) {
+      const mo = MO[dmon[2].toLowerCase()];
+      const yr = dmon[3].length === 2 ? `20${dmon[3]}` : dmon[3];
+      if (mo) return `${yr}-${mo}-${dmon[1].padStart(2,'0')}`;
+    }
+    // MM/DD/YYYY
+    const mdy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
-    return val;
+    // DD/MM/YYYY
+    const dmy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (dmy) { const yr = dmy[3].length===2?`20${dmy[3]}`:dmy[3]; return `${yr}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`; }
+    return '';
   };
 
   // ── Filter rows ───────────────────────────────────────────────────────────────
