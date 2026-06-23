@@ -10,6 +10,8 @@ export function useTransactions() {
   const [rows,    setRows]    = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const rowsRef = useRef<Row[]>([]);
+  const localInserts = useRef<Set<string>>(new Set());
+  const localDeletes = useRef<Set<string>>(new Set());
 
   useEffect(() => { rowsRef.current = rows; }, [rows]);
 
@@ -46,9 +48,19 @@ export function useTransactions() {
     const ch = supabase.channel(`tx_rt_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tx_rows' },
         ({ eventType, new: n, old: o }) => {
-          if (eventType === 'INSERT') setRows(prev => prev.find(x => x.id === (n as Row).id) ? prev : [n as Row, ...prev]);
-          if (eventType === 'UPDATE') setRows(prev => prev.map(x => x.id === (n as Row).id ? n as Row : x));
-          if (eventType === 'DELETE') setRows(prev => prev.filter(x => x.id !== (o as Row).id));
+          if (eventType === 'INSERT') {
+            const r = n as Row;
+            if (localInserts.current.has(r.id)) { localInserts.current.delete(r.id); return; }
+            setRows(prev => prev.find(x => x.id === r.id) ? prev : [r, ...prev]);
+          }
+          if (eventType === 'UPDATE') {
+            setRows(prev => prev.map(x => x.id === (n as Row).id ? n as Row : x));
+          }
+          if (eventType === 'DELETE') {
+            const r = o as Row;
+            if (localDeletes.current.has(r.id)) { localDeletes.current.delete(r.id); return; }
+            setRows(prev => prev.filter(x => x.id !== r.id));
+          }
         }).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
@@ -58,6 +70,7 @@ export function useTransactions() {
     const row: Row = { id: uid('tx'), display_id: '', data: {}, created_at: new Date().toISOString() };
     rowsRef.current = [row, ...rowsRef.current];
     setRows(prev => [row, ...prev]);
+    localInserts.current.add(row.id);
     bg(supabase.from('tx_rows').insert(row));
   }, []);
 
@@ -73,6 +86,7 @@ export function useTransactions() {
   const deleteRow = useCallback((rowId: string) => {
     rowsRef.current = rowsRef.current.filter(r => r.id !== rowId);
     setRows(prev => prev.filter(r => r.id !== rowId));
+    localDeletes.current.add(rowId);
     bg(supabase.from('tx_rows').delete().eq('id', rowId));
   }, []);
 

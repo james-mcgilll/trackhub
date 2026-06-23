@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import type { LAColumn, LARow } from '../types/leadAnalysis';
 import { LA_QUALIFYING_STAGES } from '../types/leadAnalysis';
@@ -23,6 +23,8 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
   const [laRows,     setLaRows]     = useState<LARow[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [syncStatus, setSyncStatus] = useState('');
+  const localRowInserts = useRef<Set<string>>(new Set());
+  const localRowUpdates = useRef<Set<string>>(new Set());
 
   // ── All useMemo ─────────────────────────────────────────────────────────
   const statusCol = useMemo(() => detectStatusCol(proposalColumns), [proposalColumns]);
@@ -222,10 +224,12 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
         ({ eventType, new: n, old: o }) => {
           if (eventType === 'INSERT') {
             const r = n as any;
+            if (localRowInserts.current.has(r.unique_id)) { localRowInserts.current.delete(r.unique_id); return; }
             setLaRows(prev => prev.find(x => x.uniqueId === r.unique_id) ? prev : [...prev, { uniqueId: r.unique_id, localData: r.local_data ?? {}, createdAt: r.created_at }]);
           }
           if (eventType === 'UPDATE') {
             const r = n as any;
+            if (localRowUpdates.current.has(r.unique_id)) { localRowUpdates.current.delete(r.unique_id); return; }
             setLaRows(prev => prev.map(x => x.uniqueId === r.unique_id ? { ...x, localData: r.local_data ?? {} } : x));
           }
           if (eventType === 'DELETE') {
