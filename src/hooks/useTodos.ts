@@ -1,144 +1,98 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '../utils/supabase';
 import type { TodoItem, Priority } from '../types/notes';
 
-const INITIAL_TODOS: TodoItem[] = [
-  {
-    id: 't1',
-    text: 'Send revised proposal to Acme Corp',
-    completed: false,
-    priority: 'high',
-    dueDate: '2024-12-13',
-    createdAt: new Date('2024-12-10'),
-  },
-  {
-    id: 't2',
-    text: 'Review Q4 pipeline analytics',
-    completed: false,
-    priority: 'high',
-    dueDate: '2024-12-14',
-    createdAt: new Date('2024-12-10'),
-  },
-  {
-    id: 't3',
-    text: 'Schedule discovery call with DataStream Inc',
-    completed: false,
-    priority: 'medium',
-    dueDate: '2024-12-15',
-    createdAt: new Date('2024-12-09'),
-  },
-  {
-    id: 't4',
-    text: 'Update CRM records for closed deals',
-    completed: true,
-    priority: 'medium',
-    createdAt: new Date('2024-12-08'),
-  },
-  {
-    id: 't5',
-    text: 'Prepare monthly spend report',
-    completed: false,
-    priority: 'medium',
-    dueDate: '2024-12-20',
-    createdAt: new Date('2024-12-08'),
-  },
-  {
-    id: 't6',
-    text: 'Follow up with NovaTech on contract signing',
-    completed: false,
-    priority: 'high',
-    dueDate: '2024-12-13',
-    createdAt: new Date('2024-12-11'),
-  },
-  {
-    id: 't7',
-    text: 'Team check-in meeting prep',
-    completed: true,
-    priority: 'low',
-    createdAt: new Date('2024-12-07'),
-  },
-  {
-    id: 't8',
-    text: 'Update lead scoring criteria',
-    completed: false,
-    priority: 'low',
-    createdAt: new Date('2024-12-06'),
-  },
-];
+const uid = () => `todo_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+const bg  = (p: PromiseLike<unknown>) => Promise.resolve(p).catch(() => {});
 
-function generateId(): string {
-  return `todo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+function rowToTodo(r: any): TodoItem {
+  return {
+    id:        r.id,
+    text:      r.text,
+    completed: r.completed,
+    priority:  r.priority,
+    dueDate:   r.due_date ?? undefined,
+    createdAt: new Date(r.created_at),
+  };
 }
 
 export function useTodos() {
-  const [todos, setTodos] = useState<TodoItem[]>(INITIAL_TODOS);
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
-  const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
+  const [todos,          setTodos]          = useState<TodoItem[]>([]);
+  const [filter,         setFilter]         = useState<'all'|'active'|'completed'>('all');
+  const [priorityFilter, setPriorityFilter] = useState<Priority|'all'>('all');
+  const [loading,        setLoading]        = useState(true);
 
-  const filteredTodos = todos.filter((t) => {
-    const matchesStatus =
-      filter === 'all' ||
-      (filter === 'active' && !t.completed) ||
-      (filter === 'completed' && t.completed);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('todos')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error?.code === '42P01') { setLoading(false); return; }
+        if (!error && data) setTodos(data.map(rowToTodo));
+      } catch { /* table may not exist yet */ }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const filteredTodos = todos.filter(t => {
+    const matchesStatus   = filter === 'all' || (filter === 'active' && !t.completed) || (filter === 'completed' && t.completed);
     const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter;
     return matchesStatus && matchesPriority;
   });
 
-  // Sort: incomplete first, then by priority
-  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
   const sortedTodos = [...filteredTodos].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     return priorityOrder[a.priority] - priorityOrder[b.priority];
   });
 
   const addTodo = useCallback((text: string, priority: Priority = 'medium') => {
-    const newTodo: TodoItem = {
-      id: generateId(),
-      text,
-      completed: false,
-      priority,
-      createdAt: new Date(),
-    };
-    setTodos((prev) => [newTodo, ...prev]);
+    const now = new Date();
+    const todo: TodoItem = { id: uid(), text, completed: false, priority, createdAt: now };
+    setTodos(prev => [todo, ...prev]);
+    bg(supabase.from('todos').insert({ id: todo.id, text, completed: false, priority, created_at: now.toISOString() }));
   }, []);
 
   const toggleTodo = useCallback((id: string) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-    );
+    setTodos(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const completed = !t.completed;
+      bg(supabase.from('todos').update({ completed }).eq('id', id));
+      return { ...t, completed };
+    }));
   }, []);
 
   const updateTodo = useCallback((id: string, changes: Partial<TodoItem>) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...changes } : t))
-    );
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+    const dbChanges: any = {};
+    if (changes.text      !== undefined) dbChanges.text     = changes.text;
+    if (changes.priority  !== undefined) dbChanges.priority = changes.priority;
+    if (changes.dueDate   !== undefined) dbChanges.due_date = changes.dueDate;
+    if (changes.completed !== undefined) dbChanges.completed = changes.completed;
+    bg(supabase.from('todos').update(dbChanges).eq('id', id));
   }, []);
 
   const deleteTodo = useCallback((id: string) => {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
+    setTodos(prev => prev.filter(t => t.id !== id));
+    bg(supabase.from('todos').delete().eq('id', id));
   }, []);
 
   const clearCompleted = useCallback(() => {
-    setTodos((prev) => prev.filter((t) => !t.completed));
+    setTodos(prev => {
+      const completed = prev.filter(t => t.completed);
+      completed.forEach(t => bg(supabase.from('todos').delete().eq('id', t.id)));
+      return prev.filter(t => !t.completed);
+    });
   }, []);
 
   const stats = {
-    total: todos.length,
-    active: todos.filter((t) => !t.completed).length,
-    completed: todos.filter((t) => t.completed).length,
-    high: todos.filter((t) => t.priority === 'high' && !t.completed).length,
+    total:     todos.length,
+    active:    todos.filter(t => !t.completed).length,
+    completed: todos.filter(t => t.completed).length,
+    high:      todos.filter(t => t.priority === 'high' && !t.completed).length,
   };
 
-  return {
-    todos: sortedTodos,
-    filter,
-    setFilter,
-    priorityFilter,
-    setPriorityFilter,
-    addTodo,
-    toggleTodo,
-    updateTodo,
-    deleteTodo,
-    clearCompleted,
-    stats,
-  };
+  return { todos: sortedTodos, filter, setFilter, priorityFilter, setPriorityFilter, addTodo, toggleTodo, updateTodo, deleteTodo, clearCompleted, stats, loading };
 }
