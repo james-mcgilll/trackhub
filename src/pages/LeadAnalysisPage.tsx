@@ -59,9 +59,32 @@ export const LeadAnalysisPage: React.FC = () => {
 
   const filtered = React.useMemo(() => applyFiltersLA(mergedRows, activeFilters), [mergedRows, activeFilters]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
+  // Sort by date column descending (latest first), fallback to uniqueId desc
+  const sortedFiltered = React.useMemo(() => {
+    const dateCol = laColumns.find(c => c.type === 'date' || /date/i.test(c.name));
+    if (!dateCol) return filtered;
+
+    const MO: Record<string,string> = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+    const toIso = (v: string) => {
+      if (!v) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      const m = v.match(/^(\d{1,2})[- ]([A-Za-z]{3})[- ](\d{2,4})$/);
+      if (m) { const mo = MO[m[2].toLowerCase()]; const yr = m[3].length===2?`20${m[3]}`:m[3]; if (mo) return `${yr}-${mo}-${m[1].padStart(2,'0')}`; }
+      return v;
+    };
+    return [...filtered].sort((a, b) => {
+      const da = toIso(a.data[dateCol.id] ?? '');
+      const db = toIso(b.data[dateCol.id] ?? '');
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.localeCompare(da);
+    });
+  }, [filtered, laColumns]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / ROWS_PER_PAGE));
   const safePage   = Math.min(page, totalPages);
-  const pageRows   = filtered.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE);
+  const pageRows   = sortedFiltered.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE);
 
   const stageCounts = React.useMemo(() => {
     const exact: Record<string, number> = {};
@@ -179,7 +202,7 @@ export const LeadAnalysisPage: React.FC = () => {
 
       {/* Stats bar */}
       <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
-        <span><strong className="text-slate-800 font-semibold">{filtered.length}</strong> leads</span>
+        <span><strong className="text-slate-800 font-semibold">{sortedFiltered.length}</strong> leads</span>
         <span className="text-slate-300">|</span>
         <span><strong className="text-slate-800 font-semibold">{laColumns.length}</strong> columns</span>
 
