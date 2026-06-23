@@ -215,6 +215,46 @@ export function useLeadAnalysis(proposalColumns: Column[], proposalRows: Row[]) 
       } catch (e) { console.warn('LA load error:', e); }
       finally { setLoading(false); }
     })();
+
+    // Realtime for la_rows
+    const rowCh = supabase.channel(`la_rows_rt_${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'la_rows' },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'INSERT') {
+            const r = n as any;
+            setLaRows(prev => prev.find(x => x.uniqueId === r.unique_id) ? prev : [...prev, { uniqueId: r.unique_id, localData: r.local_data ?? {}, createdAt: r.created_at }]);
+          }
+          if (eventType === 'UPDATE') {
+            const r = n as any;
+            setLaRows(prev => prev.map(x => x.uniqueId === r.unique_id ? { ...x, localData: r.local_data ?? {} } : x));
+          }
+          if (eventType === 'DELETE') {
+            const r = o as any;
+            setLaRows(prev => prev.filter(x => x.uniqueId !== r.unique_id));
+          }
+        })
+      .subscribe();
+
+    // Realtime for la_columns
+    const colCh = supabase.channel(`la_cols_rt_${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'la_columns' },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'INSERT') {
+            const r = n as any;
+            setLaColumns(prev => prev.find(x => x.id === r.id) ? prev : [...prev, { id: r.id, name: r.name, source: r.source, linkedColId: r.linked_col_id, type: r.type, options: r.options, width: r.width, order: r.order }]);
+          }
+          if (eventType === 'UPDATE') {
+            const r = n as any;
+            setLaColumns(prev => prev.map(x => x.id === r.id ? { id: r.id, name: r.name, source: r.source, linkedColId: r.linked_col_id, type: r.type, options: r.options, width: r.width, order: r.order } : x));
+          }
+          if (eventType === 'DELETE') {
+            const r = o as any;
+            setLaColumns(prev => prev.filter(x => x.id !== r.id));
+          }
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(rowCh); supabase.removeChannel(colCh); };
   }, []);
 
   // Sync whenever qualifying leads change (new rows OR status changes to/from qualifying)

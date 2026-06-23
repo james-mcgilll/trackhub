@@ -72,7 +72,7 @@ export function useProposalTable() {
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    const rowCh = supabase.channel('rows_rt')
+    const rowCh = supabase.channel(`rows_rt_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_rows' },
         ({ eventType, new: n, old: o }) => {
           if (eventType === 'INSERT') {
@@ -91,7 +91,7 @@ export function useProposalTable() {
           }
         }).subscribe();
 
-    const colCh = supabase.channel('cols_rt')
+    const colCh = supabase.channel(`cols_rt_${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_columns' },
         ({ eventType, new: n, old: o }) => {
           if (eventType === 'INSERT') {

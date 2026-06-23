@@ -36,6 +36,16 @@ export function useNotes() {
       } catch { /* table may not exist yet */ }
       finally { setLoading(false); }
     })();
+
+    const ch = supabase.channel(`notes_rt_${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'INSERT') setNotes(prev => prev.find(x => x.id === (n as any).id) ? prev : [rowToNote(n), ...prev]);
+          if (eventType === 'UPDATE') setNotes(prev => prev.map(x => x.id === (n as any).id ? rowToNote(n) : x));
+          if (eventType === 'DELETE') setNotes(prev => prev.filter(x => x.id !== (o as any).id));
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
   const filteredNotes = search

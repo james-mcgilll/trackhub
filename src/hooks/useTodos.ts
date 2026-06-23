@@ -34,6 +34,16 @@ export function useTodos() {
       } catch { /* table may not exist yet */ }
       finally { setLoading(false); }
     })();
+
+    const ch = supabase.channel(`todos_rt_${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todos' },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'INSERT') setTodos(prev => prev.find(x => x.id === (n as any).id) ? prev : [rowToTodo(n), ...prev]);
+          if (eventType === 'UPDATE') setTodos(prev => prev.map(x => x.id === (n as any).id ? rowToTodo(n) : x));
+          if (eventType === 'DELETE') setTodos(prev => prev.filter(x => x.id !== (o as any).id));
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
   const filteredTodos = todos.filter(t => {
