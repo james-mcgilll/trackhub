@@ -183,11 +183,13 @@ export const ReportingPage: React.FC = () => {
     return dates.map(date => {
       const dayData = lookup[date] ?? {};
       const counts: Record<string, number> = {};
-      let total = 0;
-      for (const s of series) {
-        counts[s.label] = dayData[s.label] ?? 0;
-        total += counts[s.label];
+      // Cumulative funnel: each stage includes all rows at that stage OR beyond
+      // e.g. Submitted = Submitted + Viewed + Contacted + Interviewed + Hired
+      for (let i = 0; i < series.length; i++) {
+        const stagesAtOrBeyond = series.slice(i).map(s => s.label);
+        counts[series[i].label] = stagesAtOrBeyond.reduce((sum, lbl) => sum + (dayData[lbl] ?? 0), 0);
       }
+      const total = counts[series[0]?.label ?? ''] ?? 0; // total = Submitted (widest stage)
       return { date, counts, total, sdrCounts: sdrLookup[date] ?? {} };
     });
   }, [filteredRows, dates, dateCol, statusCol, sdrCol, series, resolveLabel]);
