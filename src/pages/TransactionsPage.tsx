@@ -3,6 +3,7 @@ import { Plus, Download, Upload, TrendingUp, TrendingDown, DollarSign, BarChart2
 import { PageHeader } from '../components/ui/PageHeader';
 import { ProposalTable } from '../components/proposals/ProposalTable';
 import { AddColumnModal } from '../components/proposals/AddColumnModal';
+import { ExportModal } from '../components/transactions/ExportModal';
 import { ImportModal } from '../components/proposals/ImportModal';
 import { ColumnFilters, applyFilters } from '../components/ui/ColumnFilters';
 import type { ActiveFilter } from '../components/ui/ColumnFilters';
@@ -135,6 +136,7 @@ export const TransactionsPage: React.FC = () => {
 
   const [showAddCol,    setShowAddCol]    = useState(false);
   const [showImport,    setShowImport]    = useState(false);
+  const [showExport,    setShowExport]    = useState(false);
   const [importing,     setImporting]     = useState(false);
   const [importMsg,     setImportMsg]     = useState('');
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
@@ -336,13 +338,6 @@ export const TransactionsPage: React.FC = () => {
 
   const fmt = (n:number) => n.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  const handleExport = () => {
-    const h = columns.map(c=>`"${c.name}"`).join(',');
-    const lines = filteredRows.map(r=>columns.map(c=>`"${(r.data[c.id]??'').replace(/"/g,'""')}"`).join(','));
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([[h,...lines].join('\n')],{type:'text/csv'}));
-    a.download='transactions.csv'; a.click();
-  };
 
   const moveLeft  = (id:string) => { const i=columns.findIndex(c=>c.id===id); if(i>0) reorderColumns(id,columns[i-1].id,'before'); };
   const moveRight = (id:string) => { const i=columns.findIndex(c=>c.id===id); if(i<columns.length-1) reorderColumns(id,columns[i+1].id,'after'); };
@@ -363,7 +358,7 @@ export const TransactionsPage: React.FC = () => {
             <button onClick={()=>setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
               <Upload size={14}/> Import
             </button>
-            <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+            <button onClick={() => setShowExport(true)} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
               <Download size={14}/> Export
             </button>
             <button onClick={()=>setShowAddCol(true)} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors" style={{boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
@@ -570,6 +565,10 @@ export const TransactionsPage: React.FC = () => {
           onAdd={(name,type,options)=>{addColumn(name,type as ColumnType,options);setShowAddCol(false);}}
           onClose={()=>setShowAddCol(false)}
         />
+      )}
+
+      {showExport && (
+        <ExportModal columns={columns} rows={rows} onClose={() => setShowExport(false)} />
       )}
 
       {showImport && (
