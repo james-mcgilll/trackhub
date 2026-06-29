@@ -10,7 +10,7 @@ const fmt = (n: number) => n.toLocaleString('en', { minimumFractionDigits: 2, ma
 // Mini SVG bar chart
 
 export const DashboardPage: React.FC = () => {
-  const { columns, rows, priorityRecords } = useProposals();
+  const { columns, rows, priorityRecords, laColumns, laMergedRows } = useProposals();
   const { columns: txCols, rows: txRows } = useTransactions();
   const { stats: todoStats, todos } = useTodos();
 
@@ -146,6 +146,49 @@ export const DashboardPage: React.FC = () => {
   const recentRows = useMemo(() => rows.slice(0, 5), [rows]);
 
   const hiredCount = statusBreakdown['Hired'] ?? 0;
+
+  // ── Active leads from Lead Analysis ──────────────────────────────────────
+  const leadStatusCol = useMemo(() =>
+    laColumns.find(c => c.name.toLowerCase().includes('lead status') || c.name.toLowerCase() === 'lead status'),
+    [laColumns]
+  );
+
+  const laOptMap = useMemo(() => {
+    const map: Record<string, Record<string,string>> = {};
+    for (const col of laColumns) {
+      if (col.type === 'dropdown' && col.options) {
+        map[col.id] = {};
+        for (const opt of col.options as {id:string;label:string}[]) map[col.id][opt.id] = opt.label;
+      }
+    }
+    return map;
+  }, [laColumns]);
+
+  const activeLeads = useMemo(() => {
+    if (!leadStatusCol) return [];
+    return laMergedRows.filter(row => {
+      const val = row.data[leadStatusCol.id] ?? '';
+      const label = laOptMap[leadStatusCol.id]?.[val] ?? val;
+      return label.toLowerCase() === 'active';
+    });
+  }, [laMergedRows, leadStatusCol, laOptMap]);
+
+  const leadStatusBreakdown = useMemo(() => {
+    if (!leadStatusCol) return {};
+    const b: Record<string, number> = {};
+    for (const row of laMergedRows) {
+      const val = row.data[leadStatusCol.id] ?? '';
+      const label = (laOptMap[leadStatusCol.id]?.[val] ?? val) || 'Unknown';
+      if (label && label !== 'Unknown') b[label] = (b[label] ?? 0) + 1;
+    }
+    return b;
+  }, [laMergedRows, leadStatusCol, laOptMap]);
+
+  // Get a display name column from LA (first text column that's not a date)
+  const laNameCol = useMemo(() =>
+    laColumns.find(c => c.type === 'text' && !/date/i.test(c.name)),
+    [laColumns]
+  );
 
   return (
     <div className="space-y-5 w-full">
@@ -365,6 +408,60 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── Active Leads ── */}
+      {activeLeads.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <h3 className="text-sm font-bold text-slate-800" style={{ fontFamily:"'Space Grotesk',sans-serif" }}>Active Leads</h3>
+              <span className="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">{activeLeads.length}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              {Object.entries(leadStatusBreakdown).map(([label, count]) => {
+                const color = label.toLowerCase() === 'active' ? 'bg-emerald-100 text-emerald-700'
+                  : label.toLowerCase() === 'lost' ? 'bg-red-100 text-red-600'
+                  : label.toLowerCase() === 'won' ? 'bg-blue-100 text-blue-700'
+                  : label.toLowerCase() === 'doubtful' ? 'bg-amber-100 text-amber-700'
+                  : 'bg-slate-100 text-slate-600';
+                return (
+                  <span key={label} className={`text-xs font-medium px-2 py-0.5 rounded-full ${color}`}>
+                    {label}: {count}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {activeLeads.slice(0, 10).map(row => {
+              const name = laNameCol ? (row.data[laNameCol.id] ?? '') : '';
+              const priority = priorityRecords.find(r => r.unique_id === row.uniqueId);
+              const tierColor = priority?.tier === 'High Tier' ? 'bg-emerald-100 text-emerald-700'
+                : priority?.tier === 'Medium Tier' ? 'bg-amber-100 text-amber-700'
+                : priority ? 'bg-slate-100 text-slate-500' : '';
+              return (
+                <div key={row.uniqueId} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+                  <span className="text-xs font-mono font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded flex-shrink-0">{row.uniqueId}</span>
+                  {name && <span className="flex-1 text-xs text-slate-700 truncate font-medium">{name}</span>}
+                  <span className="text-xs text-slate-400 hidden sm:block">{row.currentStatus}</span>
+                  {priority && (
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded flex-shrink-0 ${tierColor}`}>
+                      {priority.tier.replace(' Tier','')} · {priority.score > 0 ? `+${priority.score}` : priority.score}
+                    </span>
+                  )}
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full flex-shrink-0" />
+                </div>
+              );
+            })}
+          </div>
+          {activeLeads.length > 10 && (
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
+              <p className="text-xs text-slate-400">+{activeLeads.length - 10} more active leads — view in Lead Analysis</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent proposals */}
       {recentRows.length > 0 && (
