@@ -83,7 +83,7 @@ function App() {
       case 'proposals':           return <ProposalsPage searchHighlight={searchHighlight} onClearHighlight={() => setSearchHighlight('')} />;
       case 'reporting':           return <ReportingPage />;
       case 'smart-analysis':      return <SmartAnalysisPage />;
-      case 'lead-analysis':       return <ErrorBoundary><LeadAnalysisPage /></ErrorBoundary>;
+      case 'lead-analysis':       return <ErrorBoundary><LeadAnalysisPage searchHighlight={searchHighlight} /></ErrorBoundary>;
       case 'job-analysis':        return <JobAnalysisPage />;
       case 'proposal-creation':   return <ProposalCreationPage />;
       case 'lead-prioritization': return <ErrorBoundary><LeadPrioritizationPage /></ErrorBoundary>;

@@ -14,6 +14,7 @@ interface MergedRow {
 interface LATableProps {
   columns: LAColumn[];
   rows: MergedRow[];
+  searchHighlight?: string;
   priorityByUniqueId?: Record<string, { score: number; tier: string }>;
   onUpdateCell: (uniqueId: string, colId: string, value: string) => void;
   onDeleteColumn: (colId: string) => void;
@@ -172,7 +173,7 @@ const ReadOnlyCell = memo(({ col, value }: { col: LAColumn; value: string }) => 
 export const LATable: React.FC<LATableProps> = ({
   columns, rows, priorityByUniqueId = {},
   onUpdateCell, onDeleteColumn, onRenameColumn, onResizeColumn,
-  onReorderColumns, onUpdateColumnOptions,
+  onReorderColumns, onUpdateColumnOptions, searchHighlight = '',
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
@@ -300,9 +301,17 @@ export const LATable: React.FC<LATableProps> = ({
               </tr>
             ) : rows.map(row => (
               <tr key={row.uniqueId}
+                ref={el => {
+                  if (!el || !searchHighlight) return;
+                  const q = searchHighlight.toLowerCase();
+                  const matches = row.uniqueId.toLowerCase().includes(q) || Object.values(row.data).some(v => String(v).toLowerCase().includes(q));
+                  el.setAttribute('data-la-highlight', matches ? 'true' : 'false');
+                }}
                 onClick={() => setSelectedRow(row.uniqueId === selectedRow ? null : row.uniqueId)}
                 className={`border-b border-slate-100 last:border-0 transition-colors group/row cursor-pointer ${
-                  selectedRow === row.uniqueId
+                  searchHighlight && (row.uniqueId.toLowerCase().includes(searchHighlight.toLowerCase()) || Object.values(row.data).some(v => String(v).toLowerCase().includes(searchHighlight.toLowerCase())))
+                    ? 'bg-amber-50 border-l-4 border-l-amber-400'
+                    : selectedRow === row.uniqueId
                     ? 'bg-blue-50 border-l-2 border-l-blue-400'
                     : 'hover:bg-blue-50/30'
                 }`}

@@ -13,7 +13,7 @@ import { getFunnelStatusStyle } from '../types/proposals';
 const ROWS_PER_PAGE = 100;
 const FUNNEL_ORDER = ['Contacted', 'Interviewed', 'Hired'];
 
-export const LeadAnalysisPage: React.FC = () => {
+export const LeadAnalysisPage: React.FC<{ searchHighlight?: string }> = ({ searchHighlight = '' }) => {
   const { columns: proposalColumns, rows: proposalRows, loading: proposalLoading } = useProposals();
   const { priorityRecords } = useProposals();
 
@@ -30,6 +30,23 @@ export const LeadAnalysisPage: React.FC = () => {
   const [page,       setPage]       = useState(1);
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
   const handleFiltersChange = (f: ActiveFilter[]) => { setActiveFilters(f); setPage(1); };
+
+  // Jump to correct page when navigated from global search
+  React.useEffect(() => {
+    if (!searchHighlight) return;
+    const q = searchHighlight.toLowerCase();
+    const matchIdx = sortedFiltered.findIndex(row =>
+      row.uniqueId.toLowerCase().includes(q) ||
+      Object.values(row.data).some(v => String(v).toLowerCase().includes(q))
+    );
+    if (matchIdx >= 0) {
+      setPage(Math.floor(matchIdx / ROWS_PER_PAGE) + 1);
+      setTimeout(() => {
+        const el = document.querySelector('[data-la-highlight="true"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+    }
+  }, [searchHighlight]);
 
 
   // All derived state as useMemo — no code between hooks
@@ -216,6 +233,7 @@ export const LeadAnalysisPage: React.FC = () => {
         columns={laColumns}
         rows={pageRows}
         priorityByUniqueId={priorityByUniqueId}
+        searchHighlight={searchHighlight}
         onUpdateCell={updateCell}
         onDeleteColumn={deleteColumn}
         onRenameColumn={renameColumn}
