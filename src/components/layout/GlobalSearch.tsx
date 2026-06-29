@@ -51,7 +51,7 @@ function Highlight({ text, q }: { text: string; q: string }) {
 }
 
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
-  const { columns, rows, priorityRecords } = useProposals();
+  const { columns, rows, priorityRecords, laColumns, laMergedRows } = useProposals();
 
   const [query,   setQuery]   = useState('');
   const [open,    setOpen]    = useState(false);
@@ -159,6 +159,55 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
       // e.g. if (isJobAnalysisRow) add('job-analysis', ...)
 
       if (found.length >= 60) break;
+    }
+
+    // ── Search Lead Analysis local columns (client names, notes etc) ─────────
+    for (const row of laMergedRows) {
+      // Skip if already found this ID in proposals
+      if (seen.has(`${row.uniqueId}-lead-analysis`)) continue;
+
+      let matchedField = '';
+      let matchedValue = '';
+
+      // Match uniqueId
+      if (row.uniqueId.toLowerCase().includes(q)) {
+        matchedField = 'Unique ID';
+        matchedValue = row.uniqueId;
+      }
+
+      // Search all LA columns
+      if (!matchedField) {
+        // Prioritise local text columns (client names, notes etc)
+        const sorted = [...laColumns].sort((a, b) => {
+          const aPri = (a.type === 'text' || a.type === 'link') ? 0 : 1;
+          const bPri = (b.type === 'text' || b.type === 'link') ? 0 : 1;
+          return aPri - bPri;
+        });
+        for (const col of sorted) {
+          const val = row.data[col.id] ?? '';
+          if (!val) continue;
+          if (val.toLowerCase().includes(q)) {
+            matchedField = col.name;
+            matchedValue = val;
+            break;
+          }
+        }
+      }
+
+      if (!matchedField) continue;
+
+      const key = `${row.uniqueId}-lead-analysis`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        found.push({
+          module: 'lead-analysis',
+          displayId: row.uniqueId,
+          matchedField,
+          matchedValue,
+          statusLabel: row.currentStatus,
+          extra: undefined,
+        });
+      }
     }
 
     // ── Also search priority records directly by unique_id ──────────────────

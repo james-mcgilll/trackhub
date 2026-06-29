@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+
+export interface MergedRow { uniqueId: string; data: Record<string, string>; currentStatus: string; }
 import { supabase } from '../utils/supabase';
 import type { LAColumn, LARow } from '../types/leadAnalysis';
 import { LA_QUALIFYING_STAGES } from '../types/leadAnalysis';

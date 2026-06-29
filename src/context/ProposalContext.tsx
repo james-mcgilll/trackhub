@@ -1,8 +1,11 @@
 import React, { createContext, useContext } from 'react';
 import { useProposalTable } from '../hooks/useProposalTable';
 import { useLeadPriority } from '../hooks/useLeadPriority';
+import { useLeadAnalysis } from '../hooks/useLeadAnalysis';
 import type { Column, Row, ColumnType } from '../types/proposals';
 import type { LeadPriorityRecord } from '../types/leadPriority';
+import type { LAColumn } from '../types/leadAnalysis';
+import type { MergedRow } from '../hooks/useLeadAnalysis';
 
 interface ProposalContextType {
   columns: Column[];
@@ -22,6 +25,9 @@ interface ProposalContextType {
   resizeColumn: (colId: string, width: number) => void;
   reorderColumns: (sourceId: string, targetId: string, position: 'before' | 'after') => void;
   updateColumnOptions: (colId: string, options: any) => void;
+  // Lead Analysis — shared for global search
+  laColumns: LAColumn[];
+  laMergedRows: MergedRow[];
   // Lead Priority — shared so only one Supabase subscription exists
   priorityRecords: LeadPriorityRecord[];
   priorityLoading: boolean;
@@ -35,9 +41,12 @@ const ProposalContext = createContext<ProposalContextType | null>(null);
 export const ProposalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const proposalData  = useProposalTable();
   const priorityData  = useLeadPriority();
+  const laData        = useLeadAnalysis(proposalData.columns, proposalData.rows);
 
   const value: ProposalContextType = {
     ...proposalData,
+    laColumns:             laData.laColumns,
+    laMergedRows:          laData.mergedRows,
     priorityRecords:       priorityData.records,
     priorityLoading:       priorityData.loading,
     savePriorityRecord:    priorityData.saveRecord,
