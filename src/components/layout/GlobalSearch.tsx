@@ -88,7 +88,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
   // ── Core search: match rows against query, determine all modules they appear in ──
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase();
-    if (!q || q.length < 2) return [];
+    if (!q || q.length < 1) return [];
 
     const found: SearchResult[] = [];
     const seen = new Set<string>();
@@ -105,17 +105,25 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
       let matchedField = '';
       let matchedValue = '';
 
-      // Match display_id
+      // Match display_id first
       if (row.display_id?.toLowerCase().includes(q)) {
         matchedField = 'Unique ID';
         matchedValue = row.display_id ?? '';
       }
 
-      // Match any column value
+      // Search ALL columns - don't break early, find the best match
       if (!matchedField) {
-        for (const col of columns) {
+        // Priority: text/link columns first (names, titles, links), then dropdowns
+        const sorted = [...columns].sort((a, b) => {
+          const aPri = (a.type === 'text' || a.type === 'link') ? 0 : 1;
+          const bPri = (b.type === 'text' || b.type === 'link') ? 0 : 1;
+          return aPri - bPri;
+        });
+        for (const col of sorted) {
           const raw   = row.data[col.id] ?? '';
+          if (!raw) continue;
           const label = optionMap[col.id]?.[raw] ?? raw;
+          // Match against both the raw value AND the resolved label
           if (label.toLowerCase().includes(q) || raw.toLowerCase().includes(q)) {
             matchedField = col.name;
             matchedValue = label || raw;
@@ -198,7 +206,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigate }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
-    setOpen(e.target.value.length >= 2);
+    setOpen(e.target.value.trim().length >= 1);
   };
 
   const handleClick = (result: SearchResult) => {
