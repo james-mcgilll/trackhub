@@ -240,7 +240,7 @@ export const LeadPrioritizationPage: React.FC = () => {
         </div>
 
         {/* ── Right: score + save ── */}
-        <div className="space-y-4 lg:sticky lg:top-4 self-start">
+        <div className="space-y-4 self-start">
           <ScoreDisplay score={score} />
 
           <button
