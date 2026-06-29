@@ -151,9 +151,16 @@ const EditableCell = memo(({ col, value, onChange }: {
 });
 
 // ── Read-only cell for linked columns ─────────────────────────────────────────
-const ReadOnlyCell = memo(({ value }: { col: LAColumn; value: string }) => {
-  // For dropdown linked cols, we just show the raw value (could be an option ID or label)
-  const display = value || '—';
+const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const toTxDisplay = (v: string): string => {
+  // YYYY-MM-DD -> DD-Mon-YYYY
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}-${MN[parseInt(m[2],10)-1]}-${m[1]}`;
+  return v;
+};
+
+const ReadOnlyCell = memo(({ col, value }: { col: LAColumn; value: string }) => {
+  const display = col.type === 'date' ? (toTxDisplay(value) || '—') : (value || '—');
   return (
     <div className="w-full h-full flex items-center px-2.5 bg-slate-50/50 cursor-default">
       <span className="text-xs text-slate-600 truncate">{display}</span>
