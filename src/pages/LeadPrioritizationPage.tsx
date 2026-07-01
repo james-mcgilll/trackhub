@@ -168,7 +168,7 @@ export const LeadPrioritizationPage: React.FC = () => {
               </div>
 
               {showDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50"
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl z-[9999]"
                   style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
                   <div className="p-2 border-b border-slate-100">
                     <input
@@ -240,7 +240,7 @@ export const LeadPrioritizationPage: React.FC = () => {
         </div>
 
         {/* ── Right: score + save ── */}
-        <div className="space-y-4 self-start">
+        <div className="space-y-4">
           <ScoreDisplay score={score} />
 
           <button
