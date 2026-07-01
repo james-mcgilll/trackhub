@@ -137,6 +137,26 @@ export const LeadPrioritizationPage: React.FC = () => {
         }
       />
 
+      {/* Right panel - score, save, summary - shown at top on mobile */}
+      <div className="flex flex-wrap gap-3 lg:hidden">
+        <div className="flex-1 min-w-48">
+          <ScoreDisplay score={score} />
+        </div>
+        <button onClick={handleSave} disabled={!canSave || saveStatus === 'saving'}
+          className={`flex-1 min-w-36 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all ${
+            saveStatus === 'saved'  ? 'bg-emerald-500 text-white' :
+            saveStatus === 'error'  ? 'bg-red-500 text-white' :
+            saveStatus === 'saving' ? 'bg-blue-400 text-white cursor-wait' :
+            canSave                 ? 'bg-blue-600 text-white hover:bg-blue-700' :
+                                      'bg-slate-100 text-slate-400 cursor-not-allowed'
+          }`}>
+          {saveStatus === 'saved' ? <><CheckCircle2 size={16}/> Saved!</> :
+           saveStatus === 'error' ? <><AlertCircle size={16}/> Error</> :
+           saveStatus === 'saving' ? <>Saving...</> :
+           <><Save size={16}/> {isEditing ? 'Update' : 'Save Record'}</>}
+        </button>
+      </div>
+
       {/* Main content - single flow, no grid height issues */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* ── Left: ID selector + checklist ── */}
@@ -240,8 +260,8 @@ export const LeadPrioritizationPage: React.FC = () => {
           )}
         </div>
 
-        {/* ── Right: score + save ── */}
-        <div className="w-full lg:w-72 flex-shrink-0 space-y-4">
+        {/* ── Right: score + save — desktop only ── */}
+        <div className="hidden lg:block w-72 flex-shrink-0 space-y-4">
           <ScoreDisplay score={score} />
 
           <button
