@@ -137,7 +137,7 @@ export const LeadPrioritizationPage: React.FC = () => {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* ── Left: checklist ── */}
         <div className="lg:col-span-2 space-y-5">
 

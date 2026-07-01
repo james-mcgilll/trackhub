@@ -23,7 +23,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
         currentPage={currentPage}
         onNavigate={onNavigate}
       />
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
         <Header onMobileMenuOpen={openMobile} currentPage={currentPage} onNavigate={onNavigate} />
         <main className="flex-1 overflow-y-auto p-3 md:p-4 pb-8">
           {children}
