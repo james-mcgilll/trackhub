@@ -80,7 +80,7 @@ export const LeadPrioritizationPage: React.FC = () => {
     setEditingId(record.id);
     setSaveStatus('idle');
     setExistingWarn(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSave = async () => {
@@ -137,9 +137,10 @@ export const LeadPrioritizationPage: React.FC = () => {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* ── Left: checklist ── */}
-        <div className="lg:col-span-2 space-y-5">
+      {/* Main content - single flow, no grid height issues */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* ── Left: ID selector + checklist ── */}
+        <div className="w-full lg:flex-1 space-y-5">
 
           {/* Unique ID selector */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -240,7 +241,7 @@ export const LeadPrioritizationPage: React.FC = () => {
         </div>
 
         {/* ── Right: score + save ── */}
-        <div className="space-y-4">
+        <div className="w-full lg:w-72 flex-shrink-0 space-y-4">
           <ScoreDisplay score={score} />
 
           <button
