@@ -117,7 +117,7 @@ export const LeadPrioritizationPage: React.FC = () => {
   const canSave = uniqueId.trim().length > 0 && idExistsInSystem;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title="Lead Prioritization"
         subtitle="Score leads that have reached Contacted, Interviewed, or Hired stage."
