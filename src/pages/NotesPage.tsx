@@ -41,6 +41,7 @@ export const NotesPage: React.FC = () => {
     addTodo,
     toggleTodo,
     deleteTodo,
+    updateTodo,
     clearCompleted,
     stats,
   } = useTodos();
@@ -237,6 +238,7 @@ export const NotesPage: React.FC = () => {
             onAdd={addTodo}
             onToggle={toggleTodo}
             onDelete={deleteTodo}
+            onUpdate={updateTodo}
             onClearCompleted={clearCompleted}
             stats={stats}
           />

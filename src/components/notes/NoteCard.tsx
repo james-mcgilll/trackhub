@@ -88,13 +88,15 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           onChange={(e) => setLocalTitle(e.target.value)}
           onBlur={handleBlur}
           autoFocus
+          onFocus={e => e.target.select()}
         />
       ) : (
         <h3
-          className={`text-sm font-semibold leading-snug pr-5 cursor-text ${colors.text}`}
+          className={`text-sm font-semibold leading-snug pr-5 cursor-text ${colors.text} group-hover:underline decoration-dotted underline-offset-2`}
           onClick={() => setEditing(true)}
+          title="Click to edit title"
         >
-          {note.title}
+          {note.title || <span className="italic opacity-40 font-normal">Click to add title...</span>}
         </h3>
       )}
 
