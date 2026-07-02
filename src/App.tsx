@@ -9,6 +9,7 @@ import { LeadPrioritizationPage } from './pages/LeadPrioritizationPage';
 import { ReportingPage } from './pages/ReportingPage';
 import { NotesPage } from './pages/NotesPage';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { TaskTrackerPage } from './pages/TaskTrackerPage';
 import {
   SmartAnalysisPage, JobAnalysisPage,
   ProposalCreationPage,
@@ -17,7 +18,7 @@ import {
 export type PageId =
   | 'dashboard' | 'proposals' | 'reporting' | 'smart-analysis'
   | 'lead-analysis' | 'job-analysis' | 'proposal-creation'
-  | 'lead-prioritization' | 'transactions' | 'notes';
+  | 'lead-prioritization' | 'transactions' | 'notes' | 'tasks';
 
 // Map between URL hash and PageId
 const HASH_TO_PAGE: Record<string, PageId> = {
@@ -31,6 +32,7 @@ const HASH_TO_PAGE: Record<string, PageId> = {
   '#/lead-prioritization': 'lead-prioritization',
   '#/transactions':        'transactions',
   '#/notes':               'notes',
+  '#/tasks':              'tasks',
 };
 
 const PAGE_TO_HASH: Record<PageId, string> = {
@@ -44,6 +46,7 @@ const PAGE_TO_HASH: Record<PageId, string> = {
   'lead-prioritization': '#/lead-prioritization',
   'transactions':        '#/transactions',
   'notes':               '#/notes',
+  'tasks':              '#/tasks',
 };
 
 function getPageFromHash(): PageId {
@@ -88,6 +91,7 @@ function App() {
       case 'proposal-creation':   return <ProposalCreationPage />;
       case 'lead-prioritization': return <ErrorBoundary><LeadPrioritizationPage /></ErrorBoundary>;
       case 'transactions':        return <ErrorBoundary><TransactionsPage /></ErrorBoundary>;
+      case 'tasks':               return <ErrorBoundary><TaskTrackerPage /></ErrorBoundary>;
       case 'notes':               return <NotesPage />;
       default:                    return <DashboardPage />;
     }
